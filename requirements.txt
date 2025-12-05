@@ -1,0 +1,31 @@
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-dotenv==1.0.0
+
+# LangChain and LangGraph
+langgraph==0.0.41
+langchain==0.1.9
+langchain-openai==0.0.5
+langchain-google-genai==1.0.1
+langchain-community==0.0.20
+
+# Data Processing
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Async and Utilities
+aiofiles==23.2.1
+python-multipart==0.0.6
+
+# CORS and Security
+python-jose[cryptography]==3.3.0
+
+# Logging and Monitoring
+python-json-logger==2.0.7
+
+# HTTP Client
+httpx==0.26.0
+
+# Environment
+python-dotenv==1.0.0
