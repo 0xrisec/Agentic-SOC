@@ -25,12 +25,34 @@ from app.context import (
 from app.orchestrator import get_orchestrator
 from app.config import settings
 
-# Configure logging
-logging.basicConfig(
-    level=settings.log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging (console + optional file)
 logger = logging.getLogger(__name__)
+logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
+_root_logger = logging.getLogger()
+_root_logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Console handler
+if not any(isinstance(h, logging.StreamHandler) for h in _root_logger.handlers):
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    _root_logger.addHandler(console_handler)
+
+# File handler
+try:
+    if settings.log_file:
+        from pathlib import Path as _Path
+        log_path = _Path(settings.log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not any(isinstance(h, logging.FileHandler) for h in _root_logger.handlers):
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setFormatter(formatter)
+            _root_logger.addHandler(file_handler)
+except Exception as _e:
+    # Fall back silently if file logging fails
+    pass
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -110,6 +132,45 @@ class WorkflowStatusResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+# --- Helpers: sanitize incoming alert payloads ---
+def _normalize_alert_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize incoming alert dict to match `Alert` model expectations.
+
+    - Ensure `timestamp` exists; derive from `evidence_sample[0].time_utc` if present.
+    - Normalize `severity` casing and values to allowed: critical/high/medium/low/info.
+    """
+    normalized = dict(raw)
+
+    # Ensure timestamp
+    if "timestamp" not in normalized or not normalized.get("timestamp"):
+        # Try to derive from evidence_sample
+        try:
+            samples = normalized.get("evidence_sample") or []
+            if isinstance(samples, list) and samples:
+                ts = samples[0].get("time_utc") or samples[0].get("timestamp")
+                if ts:
+                    normalized["timestamp"] = ts
+        except Exception:
+            # Best effort only
+            pass
+
+    # Normalize severity
+    sev_map = {
+        "critical": "critical",
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+        "info": "info",
+        "informational": "info",
+    }
+    sev = normalized.get("severity")
+    if isinstance(sev, str):
+        sev_key = sev.strip().lower()
+        normalized["severity"] = sev_map.get(sev_key, sev_key)
+
+    return normalized
+
+
 # API Endpoints
 @app.post("/api/upload-alert")
 async def upload_alert(file: UploadFile = File(...)):
@@ -135,7 +196,7 @@ async def upload_alert(file: UploadFile = File(...)):
     for raw in alerts_payload:
         try:
             # Create Alert pydantic model
-            alert = Alert(**raw)
+            alert = Alert(**_normalize_alert_payload(raw))
             # Reuse existing process pipeline
             req = ProcessAlertRequest(alert=alert)
             # Generate ID and kick off processing inline (without BackgroundTasks here)
@@ -149,7 +210,17 @@ async def upload_alert(file: UploadFile = File(...)):
             await manager.broadcast(workflow_id, {"type": "status", "stage": "submitted", "status": "processing"})
             submitted.append({"workflow_id": workflow_id, "alert_id": alert.alert_id})
         except Exception as e:
-            submitted.append({"error": f"Failed to submit alert: {str(e)}", "raw": raw})
+            # Log the error with full traceback and type for debugging
+            logger.exception(
+                "Failed to submit alert. Error: %s | Type: %s | Raw: %s",
+                str(e), e.__class__.__name__, raw
+            )
+            # Also include the error type in the response payload
+            submitted.append({
+                "error": f"Failed to submit alert: {str(e)}",
+                "error_type": e.__class__.__name__,
+                "raw": raw
+            })
 
     return {"message": f"Uploaded {len(submitted)} alerts", "workflows": submitted}
 

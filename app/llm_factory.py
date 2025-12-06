@@ -52,7 +52,8 @@ def get_llm(
             model=model or settings.gemini_model,
             temperature=temperature,
             google_api_key=settings.gemini_api_key,
-            stream=stream
+            stream=stream,
+            convert_system_message_to_human=True
         )
 
     else:

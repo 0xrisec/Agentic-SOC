@@ -170,7 +170,21 @@ class SOCOrchestrator:
         
         try:
             # Run the workflow
-            final_state = await self.app.ainvoke(state)
+            print(f"[DEBUG] Calling ainvoke: alert_id={state.alert.alert_id}, workflow_id={state.workflow_id}, status={state.status}")
+            input_payload = state.model_dump() if hasattr(state, "model_dump") else state.dict() if hasattr(state, "dict") else state
+            if not isinstance(input_payload, dict):
+                raise TypeError(f"Expected dict for ainvoke input, got {type(input_payload)}")
+            result = await self.app.ainvoke(input_payload)
+            if isinstance(result, dict):
+                try:
+                    final_state = SOCWorkflowState(**result)
+                except Exception:
+                    # If nested fields are already objects, try direct assignment
+                    final_state = SOCWorkflowState.model_validate(result) if hasattr(SOCWorkflowState, "model_validate") else SOCWorkflowState(**result)
+            else:
+                # Fallback if the graph already returns SOCWorkflowState
+                final_state = result
+            print(f"[DEBUG] ainvoke returned: decision_verdict={getattr(final_state.decision_result, 'final_verdict', None)}, priority={getattr(final_state.decision_result, 'priority', None)}, status={final_state.status}, errors={final_state.errors}")
             
             logger.info(f"Workflow completed for alert {state.alert.alert_id}")
             logger.info(f"Final verdict: {final_state.decision_result.final_verdict if final_state.decision_result else 'None'}")

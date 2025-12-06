@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+import logging
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -51,15 +52,41 @@ def check_environment():
 
 def main():
     """Main entry point"""
+    # Basic banner
     print("=" * 80)
     print("🛡️  AGENTIC SOC - AI-Powered Level 1 SOC Automation")
     print("=" * 80)
     print()
-    
+
     # Check environment
     if not check_environment():
         sys.exit(1)
-    
+
+    # Configure logging early (console + file)
+    try:
+        from app.config import settings
+        level = getattr(logging, settings.log_level.upper(), logging.INFO)
+        logging.getLogger().setLevel(level)
+        fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        root_logger = logging.getLogger()
+        # Console
+        if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+            ch = logging.StreamHandler()
+            ch.setFormatter(fmt)
+            root_logger.addHandler(ch)
+        # File
+        if settings.log_file:
+            from pathlib import Path as _Path
+            log_path = _Path(settings.log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            if not any(isinstance(h, logging.FileHandler) for h in root_logger.handlers):
+                fh = logging.FileHandler(log_path, encoding="utf-8")
+                fh.setFormatter(fmt)
+                root_logger.addHandler(fh)
+    except Exception:
+        # Proceed even if logging setup fails
+        pass
+
     print()
     print("Starting FastAPI server...")
     print()
@@ -70,18 +97,23 @@ def main():
     print("Press Ctrl+C to stop the server")
     print("=" * 80)
     print()
-    
-    # Start server
-    import uvicorn
-    from app.config import settings
-    
-    uvicorn.run(
-        "app.main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=settings.api_reload,
-        log_level=settings.log_level.lower()
-    )
+
+    try:
+        # Start server
+        import uvicorn
+        from app.config import settings
+
+        uvicorn.run(
+            "app.main:app",
+            host=settings.api_host,
+            port=settings.api_port,
+            reload=settings.api_reload,
+            log_level=settings.log_level.lower()
+        )
+    except Exception:
+        # Log full exception with stack trace to aid debugging
+        logging.exception("Fatal error while starting the server")
+        raise
 
 
 if __name__ == "__main__":

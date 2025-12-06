@@ -50,6 +50,7 @@ htmlcov/
 .env
 .env.*
 *.env
+env312
 
 # VS Code
 .vscode/

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = "INFO"
+    log_file: Optional[str] = "logs/app.log"
     
     # Agent Configuration
     triage_temperature: float = 0.1

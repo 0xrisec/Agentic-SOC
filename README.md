@@ -1,7 +1,20 @@
 # Follow this step:
-python3 -m venv env
-source env/bin/activate
-pip3 install -r requirements.txt
+
+brew install python@3.12
+
+brew install rust
+
+python3.12 -m venv env312
+
+source env312/bin/activate
+
+python -m pip install -U pip wheel
+
+
+pip install -r requirements.txt
+
+python run.py
+
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 # 🛡️ Agentic SOC - AI-Powered Level 1 SOC Automation
