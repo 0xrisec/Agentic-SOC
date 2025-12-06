@@ -16,8 +16,11 @@
                     <p class="subtitle">AI-Powered Level 1 SOC Automation</p>
                 </div>
                 <div class="header-actions">
-                    <label class="btn btn-primary" for="uploadInput">📁 Upload Alerts</label>
-                    <input id="uploadInput" type="file" accept="application/json" multiple style="display:none" />
+                    <button id="loadSampleBtn" class="btn btn-secondary">Load Sample Alerts</button>
+                    <label class="btn btn-secondary" for="uploadInput">Upload Alerts</label>
+                    <input id="uploadInput" type="file" accept="application/json" style="display:none" />
+                    <button id="uploadSubmitBtn" class="btn btn-primary">Submit Upload</button>
+                    <button id="refreshBtn" class="btn btn-primary">↻ Refresh</button>
                     <button id="clearBtn" class="btn btn-danger">Clear All</button>
                 </div>
             </div>
@@ -71,58 +74,71 @@
             </div>
         </section>
 
-        <!-- Main Content: 3 Panel Layout -->
-        <div class="main-content">
-            <!-- Left Panel: File List -->
-            <aside class="left-panel" id="leftPanel">
-                <div class="panel-header">
-                    <h3>📂 Uploaded Files</h3>
+        <!-- Workflow Controls -->
+        <section class="controls-section">
+            <div class="control-panel">
+                <div class="filter-group">
+                    <label>Filter by Status:</label>
+                    <select id="statusFilter">
+                        <option value="">All</option>
+                        <option value="new">New</option>
+                        <option value="triaging">Triaging</option>
+                        <option value="investigating">Investigating</option>
+                        <option value="deciding">Deciding</option>
+                        <option value="responding">Responding</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
                 </div>
-                <div class="file-list" id="fileList">
-                    <div class="empty-message">
-                        <p>No files uploaded yet</p>
-                    </div>
+                <div class="filter-group">
+                    <label>Filter by Priority:</label>
+                    <select id="priorityFilter">
+                        <option value="">All</option>
+                        <option value="P1">P1 - Critical</option>
+                        <option value="P2">P2 - High</option>
+                        <option value="P3">P3 - Medium</option>
+                        <option value="P4">P4 - Low</option>
+                        <option value="P5">P5 - Info</option>
+                    </select>
                 </div>
-            </aside>
+                <div class="filter-group">
+                    <label>Auto-refresh:</label>
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <span id="autoRefreshStatus">ON (5s)</span>
+                </div>
+            </div>
+        </section>
 
-            <!-- Center Panel: Alerts -->
-            <section class="center-panel">
-                <div class="panel-header">
-                    <h3>⚠️ Alerts</h3>
-                    <button id="startAnalysisBtn" class="btn btn-primary" disabled>🚀 Start Analysis</button>
-                </div>
-                <div class="alerts-container">
-                    <div class="alert-controls">
-                        <label class="select-all-label">
-                            <input type="checkbox" id="selectAllAlerts">
-                            Select All
-                        </label>
-                        <span id="selectedCount">0 selected</span>
-                    </div>
-                    <div class="alerts-list" id="alertsList">
-                        <div class="empty-message">
-                            <p>No alerts to display</p>
-                            <p class="empty-hint">Upload a file to get started</p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Right Panel: Agent Analysis Terminal -->
-            <aside class="right-panel" id="rightPanel">
-                <div class="panel-header">
-                    <h3>🤖 Agent Analysis Terminal</h3>
-                </div>
-                <div class="terminal-container" id="terminalContainer">
-                    <div class="terminal-output" id="terminalOutput">
-                        <div class="terminal-line system">
-                            <span class="timestamp">[System]</span>
-                            <span class="message">Agent terminal ready. Waiting for analysis...</span>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-        </div>
+        <!-- Alert Processing Table -->
+        <section class="alerts-section">
+            <h2>Alert Processing Status</h2>
+            <div class="table-container">
+                <table class="alerts-table" id="alertsTable">
+                    <thead>
+                        <tr>
+                            <th>Alert ID</th>
+                            <th>Rule</th>
+                            <th>Status</th>
+                            <th>Current Agent</th>
+                            <th>Verdict</th>
+                            <th>Priority</th>
+                            <th>Processing Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTableBody">
+                        <tr class="empty-state">
+                            <td colspan="8">
+                                <div class="empty-message">
+                                    <p>No alerts processed yet</p>
+                                    <p class="empty-hint">Click "Load Sample Alerts" to get started</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
         <!-- Alert Detail Modal -->
         <div id="alertModal" class="modal">
@@ -144,7 +160,7 @@
         </div>
 
         <!-- Toast Notifications -->
-        <!-- <div id="toastContainer" class="toast-container"></div> -->
+        <div id="toastContainer" class="toast-container"></div>
     </div>
 
     <script src="/static/dashboard.js"></script>

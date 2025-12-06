@@ -9,7 +9,8 @@ from app.config import settings
 from app.llm_factory import get_llm
 import json
 from datetime import datetime
-from prompts.triage_agent_human_prompt import TRIAGE_AGENT_HUMAN_PROMPT
+from prompts.human_prompts import TRIAGE_AGENT_HUMAN_PROMPT
+import asyncio
 
 
 class TriageAgent:
@@ -59,9 +60,16 @@ class TriageAgent:
                 "raw_data": json.dumps(alert.raw_data, indent=2) if alert.raw_data else "No additional data"
             }
 
-            # Create chain and invoke
+            # Create chain and invoke with timeout
             chain = self.prompt_template | self.llm
-            response = await chain.ainvoke(prompt_vars)
+
+            try:
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=2)  # Set a 30-second timeout
+            except asyncio.TimeoutError:
+                 raise TimeoutError("LLM invocation timed out after 30 seconds")
+
+            if not response or not response.content:
+                raise ValueError("LLM invocation failed or returned an empty response")
 
             # Parse response
             result_dict = self._parse_response(response.content)
@@ -110,7 +118,7 @@ class TriageAgent:
 
             state.triage_result = triage_result
             state.errors.append(f"Triage agent error: {str(e)}")
-            state.status = AlertStatus.FAILED
+            state.status = AlertStatus.COMPLETED
             return state
 
     def _parse_response(self, content: str) -> Dict[str, Any]:

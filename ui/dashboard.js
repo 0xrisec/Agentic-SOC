@@ -1,8 +1,11 @@
 // Agentic SOC Dashboard JavaScript
 
 const API_BASE = window.location.origin || 'http://localhost:8000';
-let autoRefreshInterval = null;
 let workflows = [];
+let uploadedFiles = [];
+let allAlerts = [];
+let selectedAlerts = new Set();
+let selectedFileId = null;
 // Track active WebSocket connections globally
 const wsConnections = {};
 
@@ -10,54 +13,55 @@ const wsConnections = {};
 document.addEventListener('DOMContentLoaded', () => {
     initializeDashboard();
     setupEventListeners();
-    startAutoRefresh();
 });
 
 // Initialize dashboard
 async function initializeDashboard() {
     await loadMetrics();
-    await loadWorkflows();
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    document.getElementById('loadSampleBtn').addEventListener('click', loadSampleAlerts);
-    // Upload controls
+    // Upload file - auto submit on selection
     const uploadInput = document.getElementById('uploadInput');
-    document.getElementById('uploadSubmitBtn').addEventListener('click', async () => {
-        if (!uploadInput.files || uploadInput.files.length === 0) {
-            showToast('Please select a JSON file to upload', 'warning');
-            return;
-        }
-        const file = uploadInput.files[0];
-        const formData = new FormData();
-        formData.append('file', file);
-        showLoading(true);
-        try {
-            const resp = await fetch(`${API_BASE}/api/upload-alert`, { method: 'POST', body: formData });
-            const data = await resp.json();
-            showToast(`Uploaded: ${data.message}`, 'success');
-            // Connect websockets for newly submitted workflows
-            (data.workflows || []).forEach(w => connectWorkflowWebSocket(w.workflow_id));
-            await loadWorkflows();
-        } catch (e) {
-            console.error('Upload failed', e);
-            showToast('Upload failed', 'error');
-        } finally {
-            showLoading(false);
-        }
-    });
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-        loadMetrics();
-        loadWorkflows();
-    });
-    document.getElementById('clearBtn').addEventListener('click', clearAllWorkflows);
-    document.getElementById('autoRefresh').addEventListener('change', toggleAutoRefresh);
-    document.getElementById('statusFilter').addEventListener('change', loadWorkflows);
-    document.getElementById('priorityFilter').addEventListener('change', loadWorkflows);
-    
+    if (uploadInput) {
+        uploadInput.addEventListener('change', handleFileUpload);
+    }
+
+    const clearBtn = document.getElementById('clearBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', clearAllWorkflows);
+    }
+
+    // Collapse buttons
+    const collapseLeftBtn = document.getElementById('collapseLeftBtn');
+    if (collapseLeftBtn) {
+        collapseLeftBtn.addEventListener('click', toggleLeftPanel);
+    }
+
+    const collapseRightBtn = document.getElementById('collapseRightBtn');
+    if (collapseRightBtn) {
+        collapseRightBtn.addEventListener('click', toggleRightPanel);
+    }
+
+    // Select all alerts
+    const selectAllAlerts = document.getElementById('selectAllAlerts');
+    if (selectAllAlerts) {
+        selectAllAlerts.addEventListener('change', handleSelectAll);
+    }
+
+    // Start analysis button
+    const startAnalysisBtn = document.getElementById('startAnalysisBtn');
+    if (startAnalysisBtn) {
+        startAnalysisBtn.addEventListener('click', startAnalysis);
+    }
+
     // Modal close
-    document.querySelector('.close').addEventListener('click', closeModal);
+    const closeModalBtn = document.querySelector('.close');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeModal);
+    }
+
     window.addEventListener('click', (e) => {
         const modal = document.getElementById('alertModal');
         if (e.target === modal) {
@@ -66,32 +70,215 @@ function setupEventListeners() {
     });
 }
 
-// Auto-refresh functionality
-function startAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
+// Handle file upload (auto-submit)
+async function handleFileUpload(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    showLoading(true);
+    
+    for (let file of files) {
+        try {
+            const content = await file.text();
+            const alerts = JSON.parse(content);
+            
+            // Store file info
+            const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            const fileInfo = {
+                id: fileId,
+                name: file.name,
+                alertCount: Array.isArray(alerts) ? alerts.length : (alerts.alerts ? alerts.alerts.length : 1),
+                uploadTime: new Date().toLocaleTimeString(),
+                alerts: Array.isArray(alerts) ? alerts : (alerts.alerts || [alerts])
+            };
+            
+            uploadedFiles.push(fileInfo);
+            
+        } catch (error) {
+            console.error('Error processing file:', error);
+            // showToast(`Error processing ${file.name}`, 'error');
+        }
     }
     
-    autoRefreshInterval = setInterval(async () => {
-        if (document.getElementById('autoRefresh').checked) {
-            await loadMetrics();
-            await loadWorkflows();
-        }
-    }, 5000);
+    renderFileList();
+    showLoading(false);
+    // showToast(`${files.length} file(s) uploaded successfully`, 'success');
+    
+    // Clear input
+    event.target.value = '';
 }
 
-function toggleAutoRefresh() {
-    const checkbox = document.getElementById('autoRefresh');
-    const status = document.getElementById('autoRefreshStatus');
+// Toggle left panel
+function toggleLeftPanel() {
+    const panel = document.getElementById('leftPanel');
+    const btn = document.getElementById('collapseLeftBtn');
+    panel.classList.toggle('collapsed');
+    btn.textContent = panel.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+// Toggle right panel
+function toggleRightPanel() {
+    const panel = document.getElementById('rightPanel');
+    const btn = document.getElementById('collapseRightBtn');
+    panel.classList.toggle('collapsed');
+    btn.textContent = panel.classList.contains('collapsed') ? '◀' : '▶';
+}
+
+// Render file list
+function renderFileList() {
+    const fileList = document.getElementById('fileList');
     
-    if (checkbox.checked) {
-        status.textContent = 'ON (5s)';
-        status.style.color = 'var(--success-color)';
-        startAutoRefresh();
+    if (uploadedFiles.length === 0) {
+        fileList.innerHTML = '<div class="empty-message"><p>No files uploaded yet</p></div>';
+        return;
+    }
+    
+    fileList.innerHTML = uploadedFiles.map(file => `
+        <div class="file-item ${selectedFileId === file.id ? 'selected' : ''}" onclick="selectFile('${file.id}')">
+            <div class="file-name">📄 ${file.name}</div>
+            <div class="file-info">${file.uploadTime}</div>
+            <div class="file-badge">${file.alertCount} alerts</div>
+        </div>
+    `).join('');
+}
+
+// Select file and show its alerts
+function selectFile(fileId) {
+    selectedFileId = fileId;
+    renderFileList();
+    
+    const file = uploadedFiles.find(f => f.id === fileId);
+    if (file) {
+        allAlerts = file.alerts.map((alert, index) => ({
+            ...alert,
+            fileId: fileId,
+            alertIndex: index,
+            displayId: `${file.name}-${index + 1}`
+        }));
+        selectedAlerts.clear();
+        renderAlertsList();
+        updateSelectedCount();
+    }
+}
+
+// Render alerts list
+function renderAlertsList() {
+    const alertsList = document.getElementById('alertsList');
+    
+    if (allAlerts.length === 0) {
+        alertsList.innerHTML = '<div class="empty-message"><p>No alerts to display</p><p class="empty-hint">Upload a file to get started</p></div>';
+        return;
+    }
+    
+    alertsList.innerHTML = allAlerts.map((alert, index) => {
+        const isSelected = selectedAlerts.has(index);
+        return `
+            <div class="alert-item ${isSelected ? 'selected' : ''}" onclick="toggleAlertSelection(${index}, event)">
+                <input type="checkbox" class="alert-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleAlertSelection(${index}, event)">
+                <div class="alert-header">
+                    <div class="alert-id">${alert.displayId || alert.alert_id || `Alert-${index + 1}`}</div>
+                </div>
+                <div class="alert-details">
+                    <div class="alert-detail-item">
+                        <span class="alert-detail-label">Rule:</span>
+                        <span class="alert-detail-value">${alert.rule_name || alert.rule_id || 'N/A'}</span>
+                    </div>
+                    <div class="alert-detail-item">
+                        <span class="alert-detail-label">Severity:</span>
+                        <span class="alert-detail-value">${alert.severity || 'N/A'}</span>
+                    </div>
+                    <div class="alert-detail-item">
+                        <span class="alert-detail-label">Host:</span>
+                        <span class="alert-detail-value">${alert.assets?.host || alert.host || 'N/A'}</span>
+                    </div>
+                    <div class="alert-detail-item">
+                        <span class="alert-detail-label">Source IP:</span>
+                        <span class="alert-detail-value">${alert.assets?.source_ip || alert.source_ip || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Toggle alert selection
+function toggleAlertSelection(index, event) {
+    if (selectedAlerts.has(index)) {
+        selectedAlerts.delete(index);
     } else {
-        status.textContent = 'OFF';
-        status.style.color = 'var(--text-secondary)';
-        clearInterval(autoRefreshInterval);
+        selectedAlerts.add(index);
+    }
+    renderAlertsList();
+    updateSelectedCount();
+    updateStartButton();
+}
+
+// Handle select all
+function handleSelectAll(event) {
+    if (event.target.checked) {
+        allAlerts.forEach((_, index) => selectedAlerts.add(index));
+    } else {
+        selectedAlerts.clear();
+    }
+    renderAlertsList();
+    updateSelectedCount();
+    updateStartButton();
+}
+
+// Update selected count
+function updateSelectedCount() {
+    document.getElementById('selectedCount').textContent = `${selectedAlerts.size} selected`;
+}
+
+// Update start button state
+function updateStartButton() {
+    const btn = document.getElementById('startAnalysisBtn');
+    btn.disabled = selectedAlerts.size === 0;
+}
+
+// Start analysis
+async function startAnalysis() {
+    if (selectedAlerts.size === 0) {
+        // showToast('Please select at least one alert', 'warning');
+        return;
+    }
+    
+    const selectedAlertsList = Array.from(selectedAlerts).map(index => allAlerts[index]);
+    // Clear previous terminal logs on new analysis start
+    addTerminalLog('clear');
+    // Ungrouped start message(s)
+    addTerminalLog(null, `Starting analysis for ${selectedAlertsList.length} alert(s)...`);
+    showLoading(true);
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/alerts/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(selectedAlertsList)
+        });
+        
+        const data = await response.json();
+        addTerminalLog(null, `Analysis started for ${selectedAlertsList.length} alerts`);
+        
+        // Connect websockets for real-time updates
+        if (data.workflows) {
+            data.workflows.forEach(wf => {
+                connectWorkflowWebSocket(wf.workflow_id);
+                addTerminalLog(null, `Connected to workflow: ${wf.workflow_id}`);
+            });
+        }
+        
+        // showToast(`Analysis started for ${selectedAlertsList.length} alerts`, 'success');
+        
+        // Refresh metrics
+        setTimeout(() => loadMetrics(), 1000);
+        
+    } catch (error) {
+        console.error('Error starting analysis:', error);
+        addTerminalLog('error', `✗ Failed to start analysis: ${error.message}`);
+        // showToast('Error starting analysis', 'error');
+    } finally {
+        showLoading(false);
     }
 }
 
@@ -112,31 +299,90 @@ async function loadMetrics() {
     }
 }
 
-// Load workflows
-async function loadWorkflows() {
-    try {
-        const statusFilter = document.getElementById('statusFilter').value;
-        const priorityFilter = document.getElementById('priorityFilter').value;
-        
-        let url = `${API_BASE}/api/alerts/list?limit=100`;
-        if (statusFilter) url += `&status=${statusFilter}`;
-        if (priorityFilter) url += `&priority=${priorityFilter}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        workflows = data.workflows || [];
-        // Ensure websockets connected for active workflows
-        workflows.forEach(wf => {
-            if (wf.status !== 'COMPLETED' && wf.status !== 'FAILED' && wf.workflow_id) {
-                connectWorkflowWebSocket(wf.workflow_id);
-            }
-        });
-        renderWorkflowsTable(workflows);
-    } catch (error) {
-        console.error('Error loading workflows:', error);
-        showToast('Error loading workflows', 'error');
+// Modify the addTerminalLog function to group logs by msg.stage and keep other logs ungrouped
+// Also show a progress icon (↻) in the header when status is 'progress',
+// hide it on 'completed' or 'failed', and color failed status red.
+function addTerminalLog(stage, message, status = null) {
+    const terminalOutput = document.getElementById('terminalOutput');
+
+    // Clear previous logs if "start analysis" is triggered
+    if (stage === 'clear') {
+        terminalOutput.innerHTML = '';
+        return;
     }
+
+    // Handle ungrouped logs
+    if (!stage) {
+        const logLine = document.createElement('div');
+        logLine.className = 'terminal-line';
+        logLine.innerHTML = `<span class="message">${message}</span>`;
+        terminalOutput.appendChild(logLine);
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        return;
+    }
+
+    // Check if a group for this stage already exists
+    let group = terminalOutput.querySelector(`.terminal-group[data-stage="${stage}"]`);
+    if (!group) {
+        // Create a new group if it doesn't exist
+        group = document.createElement('div');
+        group.className = 'terminal-group';
+        group.dataset.stage = stage;
+        group.innerHTML = `
+            <div class="terminal-group-header">
+                <span class="group-stage">${stage.toUpperCase()}</span>
+                <span class="group-progress" style="margin-left: 8px; display: none;">↻</span>
+                <span class="group-toggle" style="margin-left: 8px;">▶</span>
+                <span class="group-status-right" style="margin-left:auto; font-size: 0.85rem; color: #94a3b8;"></span>
+            </div>
+            <div class="terminal-group-content" style="display: none;"></div>
+        `;
+        terminalOutput.appendChild(group);
+
+        // Add event listener to toggle group visibility when clicking on the group name or toggle icon
+        const groupHeader = group.querySelector('.terminal-group-header');
+        groupHeader.addEventListener('click', () => {
+            const content = group.querySelector('.terminal-group-content');
+            const toggleElement = group.querySelector('.group-toggle');
+            const isCollapsed = content.style.display === 'none';
+            content.style.display = isCollapsed ? 'block' : 'none';
+            toggleElement.textContent = isCollapsed ? '▼' : '▶';
+        });
+    }
+
+    // Update header status/progress if provided
+    if (status) {
+        const header = group.querySelector('.terminal-group-header');
+        const progressEl = group.querySelector('.group-progress');
+        const statusRight = group.querySelector('.group-status-right');
+        if (statusRight) {
+            statusRight.textContent = status;
+            // Color red on failed
+            if (String(status).toLowerCase() === 'failed') {
+                statusRight.style.color = '#ef4444';
+            } else {
+                statusRight.style.color = '#94a3b8';
+            }
+        }
+        // Show/hide progress icon
+        if (String(status).toLowerCase() === 'progress') {
+            progressEl.style.display = 'inline';
+            progressEl.classList.add('spin');
+        } else {
+            progressEl.style.display = 'none';
+            progressEl.classList.remove('spin');
+        }
+    }
+
+    // Add the log message to the group content
+    const groupContent = group.querySelector('.terminal-group-content');
+    const logLine = document.createElement('div');
+    logLine.className = 'terminal-line';
+    logLine.innerHTML = `<span class="message">${message}</span>`;
+    groupContent.appendChild(logLine);
+
+    // Scroll to the bottom of the terminal
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
 }
 
 // Connect to WebSocket for a workflow and handle live updates
@@ -151,68 +397,70 @@ function connectWorkflowWebSocket(workflowId) {
             // Optionally send a ping
             try { ws.send('ping'); } catch {}
         };
+        // Modify WebSocket message handling to log agent data
         ws.onmessage = (evt) => {
             let msg = null;
             try { msg = JSON.parse(evt.data); } catch { return; }
-            if (msg.type === 'progress') {
-                // Show agent stage transitions
-                showToast(`Workflow ${workflowId}: ${msg.stage} ${msg.status}`, 'info');
+
+            const shortId = workflowId.substring(0, 8);
+            
+            if (msg.stage && msg.status) {
+                // Group by msg.stage only; show message under that group and update status/progress
+                const stageName = `${msg.stage} agent`;
+                addTerminalLog(stageName, `[${shortId}] ${msg.status}`, msg.status);
+                console.log(`Data received from agent: ${msg.stage}`, msg.status);
             }
+
+            if (msg.type === 'progress') {
+                // Progress belongs to the same stage group
+                const stageName = `${msg.stage} agent`;
+                addTerminalLog(stageName, `[${shortId}] ${msg.status}`, msg.status);
+                // showToast(`${msg.stage}: ${msg.status}`, 'info');
+            }
+            
+            if (msg.type === 'agent_output' && msg.details) {
+                // Log detailed agent output under the agent's stage if present
+                const stageName = msg.stage ? `${msg.stage} agent` : null;
+                if (stageName) {
+                    addTerminalLog(stageName, `[${shortId}] ${msg.details}`, msg.status);
+                } else {
+                    addTerminalLog(null, `[${shortId}] ${msg.agent || 'Agent'}: ${msg.details}`);
+                }
+            }
+            
             if (msg.type === 'final') {
-                showToast(`Workflow ${workflowId} completed: ${msg.status}`, 'success');
+                addTerminalLog(null, `[${shortId}] ✓ Workflow completed: ${msg.status}`);
+                addTerminalLog(null, 'End');
+                // showToast(`Workflow completed: ${msg.status}`, 'success');
                 // Refresh to show final status and LLM results
                 loadMetrics();
-                loadWorkflows();
                 // Close ws
                 try { ws.close(); } catch {}
                 delete wsConnections[workflowId];
             }
+            
+            if (msg.type === 'error') {
+                console.log('error', `[${shortId}] ✗ Error: ${msg.message || 'Unknown error'}`);
+            }
         };
-        ws.onerror = () => {
-            // Ignore errors, will rely on polling
+        ws.onerror = (error) => {
+            console.log('error', `WebSocket error for ${shortId}: Connection failed`);
         };
         ws.onclose = () => {
+            const shortId = workflowId.substring(0, 8);
+            console.log('system', `WebSocket closed for ${shortId}`);
             delete wsConnections[workflowId];
         };
     } catch (e) {
         console.warn('WS connect failed', e);
+        console.log('error', `Failed to connect WebSocket: ${e.message}`);
     }
 }
 
-// Render workflows table
+// Keep for backward compatibility but not actively used in new UI
 function renderWorkflowsTable(workflowsList) {
-    const tbody = document.getElementById('alertsTableBody');
-    
-    if (workflowsList.length === 0) {
-        tbody.innerHTML = `
-            <tr class="empty-state">
-                <td colspan="8">
-                    <div class="empty-message">
-                        <p>No alerts found</p>
-                        <p class="empty-hint">Try adjusting filters or load sample alerts</p>
-                    </div>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = workflowsList.map(workflow => `
-        <tr>
-            <td><code>${truncate(workflow.alert_id, 30)}</code></td>
-            <td>${truncate(workflow.alert_id.split('-')[1] || 'N/A', 20)}</td>
-            <td><span class="status-badge status-${workflow.status}">${workflow.status}</span></td>
-            <td>${workflow.current_agent || 'N/A'}</td>
-            <td>${workflow.verdict ? `<span class="verdict-badge verdict-${workflow.verdict}">${formatVerdict(workflow.verdict)}</span>` : '-'}</td>
-            <td>${workflow.priority ? `<span class="priority-badge priority-${workflow.priority}">${workflow.priority}</span>` : '-'}</td>
-            <td>${workflow.processing_time_seconds ? formatDuration(workflow.processing_time_seconds) : 'In progress...'}</td>
-            <td>
-                <button class="action-btn" onclick="viewAlertDetails('${workflow.workflow_id}')">
-                    View Details
-                </button>
-            </td>
-        </tr>
-    `).join('');
+    // This function is kept for potential future use or API compatibility
+    console.log('Workflows loaded:', workflowsList.length);
 }
 
 // View alert details
@@ -225,7 +473,7 @@ async function viewAlertDetails(workflowId) {
         document.getElementById('alertModal').style.display = 'block';
     } catch (error) {
         console.error('Error loading alert details:', error);
-        showToast('Error loading alert details', 'error');
+        // showToast('Error loading alert details', 'error');
     }
 }
 
@@ -447,65 +695,53 @@ function renderAlertDetails(data) {
     document.getElementById('alertDetailContent').innerHTML = html;
 }
 
-// Load sample alerts
+// Load sample alerts - simplified version
 async function loadSampleAlerts() {
-    try {
-        showLoading(true);
-        
-        const response = await fetch(`${API_BASE}/api/alerts/sample`);
-        const data = await response.json();
-        
-        if (!data.alerts || data.alerts.length === 0) {
-            showToast('No sample alerts found', 'warning');
-            showLoading(false);
-            return;
-        }
-        
-        // Process alerts in batch
-        const batchResponse = await fetch(`${API_BASE}/api/alerts/batch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data.alerts)
-        });
-        
-        const batchData = await batchResponse.json();
-        
-        showToast(`Processing ${data.alerts.length} sample alerts`, 'success');
-        showLoading(false);
-        
-        // Refresh after a delay
-        setTimeout(() => {
-            loadMetrics();
-            loadWorkflows();
-        }, 2000);
-        
-    } catch (error) {
-        console.error('Error loading sample alerts:', error);
-        showToast('Error loading sample alerts', 'error');
-        showLoading(false);
-    }
+    addTerminalLog('system', 'Loading sample alerts...');
+    // This can be extended if needed
 }
 
 // Clear all workflows
 async function clearAllWorkflows() {
-    if (!confirm('Are you sure you want to clear all workflows? This cannot be undone.')) {
+    if (!confirm('Are you sure you want to clear all data? This will remove all uploaded files and workflows.')) {
         return;
     }
     
     try {
         showLoading(true);
+        addTerminalLog('system', 'Clearing all data...');
         
         await fetch(`${API_BASE}/api/workflows/clear`, { method: 'DELETE' });
         
-        showToast('All workflows cleared', 'success');
+        // Clear local data
+        uploadedFiles = [];
+        allAlerts = [];
+        selectedAlerts.clear();
+        selectedFileId = null;
+        
+        // Clear UI
+        renderFileList();
+        renderAlertsList();
+        updateSelectedCount();
+        updateStartButton();
+        
+        // Clear terminal
+        document.getElementById('terminalOutput').innerHTML = `
+            <div class="terminal-line system">
+                <span class="message">Agent terminal ready. Waiting for analysis...</span>
+            </div>
+        `;
+        
+        // showToast('All data cleared', 'success');
+        addTerminalLog('success', '✓ All data cleared successfully');
         
         await loadMetrics();
-        await loadWorkflows();
         
         showLoading(false);
     } catch (error) {
         console.error('Error clearing workflows:', error);
-        showToast('Error clearing workflows', 'error');
+        // showToast('Error clearing workflows', 'error');
+        addTerminalLog('error', `✗ Error clearing data: ${error.message}`);
         showLoading(false);
     }
 }
@@ -520,19 +756,19 @@ function showLoading(show) {
     document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
 }
 
-// Show toast notification
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
+// // Show toast notification
+// function showToast(message, type = 'info') {
+//     const container = document.getElementById('toastContainer');
+//     const toast = document.createElement('div');
+//     toast.className = `toast ${type}`;
+//     toast.textContent = message;
     
-    container.appendChild(toast);
+//     container.appendChild(toast);
     
-    setTimeout(() => {
-        toast.remove();
-    }, 4000);
-}
+//     setTimeout(() => {
+//         toast.remove();
+//     }, 4000);
+// }
 
 // Utility functions
 function formatDuration(seconds) {
@@ -550,3 +786,48 @@ function truncate(str, maxLength) {
     if (!str) return 'N/A';
     return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
 }
+
+// Function to handle 'Details' link click and display alert information
+function viewAlertDetailsPopup(alertId) {
+    const alert = allAlerts.find(a => a.id === alertId);
+    if (!alert) {
+        console.error('Alert not found:', alertId);
+        return;
+    }
+
+    const modalContent = document.getElementById('alertDetailContent');
+    modalContent.innerHTML = `
+        <div class="detail-section">
+            <h3>Alert Information</h3>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <div class="detail-label">Alert ID</div>
+                    <div class="detail-value">${alert.id}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Priority</div>
+                    <div class="detail-value">${alert.priority}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Status</div>
+                    <div class="detail-value">${alert.status}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Description</div>
+                    <div class="detail-value">${alert.description}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modal = document.getElementById('alertModal');
+    modal.style.display = 'block';
+}
+
+// Close modal when clicking outside or on close button
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('alertModal');
+    if (event.target === modal || event.target.classList.contains('close')) {
+        modal.style.display = 'none';
+    }
+});

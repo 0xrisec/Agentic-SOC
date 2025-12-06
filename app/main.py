@@ -508,33 +508,51 @@ async def get_system_metrics():
     
     return system_metrics
 
-
 @app.post("/api/alerts/batch")
-async def process_batch(alerts: List[Alert], background_tasks: BackgroundTasks):
+async def process_batch(alerts: List[Any], background_tasks: BackgroundTasks):
     """
     Process multiple alerts in batch
     
     Returns a list of workflow IDs for tracking
     """
-    workflow_ids = []
-    
-    for alert in alerts:
-        workflow_id = str(uuid.uuid4())
-        initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id)
-        workflows[workflow_id] = initial_state
-        background_tasks.add_task(process_workflow, workflow_id, initial_state)
-        workflow_ids.append({
-            "alert_id": alert.alert_id,
-            "workflow_id": workflow_id
-        })
-    
-    logger.info(f"Batch processing started for {len(alerts)} alerts")
-    
-    return {
-        "message": f"Batch processing started for {len(alerts)} alerts",
-        "workflows": workflow_ids
-    }
+    try:
+        alerts_payload = alerts
 
+        submitted = []
+        for raw in alerts_payload:
+            try:
+                # Create Alert pydantic model
+                alert = Alert(**_normalize_alert_payload(raw))
+                # Reuse existing process pipeline
+                req = ProcessAlertRequest(alert=alert)
+                # Generate ID and kick off processing inline (without BackgroundTasks here)
+                workflow_id = str(uuid.uuid4())
+                initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id)
+                workflows[workflow_id] = initial_state
+                # Start processing asynchronously
+                import asyncio
+                asyncio.create_task(process_workflow(workflow_id, initial_state))
+                # Notify
+                await manager.broadcast(workflow_id, {"type": "status", "stage": "submitted", "status": "processing"})
+                submitted.append({"workflow_id": workflow_id, "alert_id": alert.alert_id})
+            except Exception as e:
+                # Log the error with full traceback and type for debugging
+                logger.exception(
+                    "Failed to submit alert. Error: %s | Type: %s | Raw: %s",
+                    str(e), e.__class__.__name__, raw
+                )
+                # Also include the error type in the response payload
+                submitted.append({
+                    "error": f"Failed to submit alert: {str(e)}",
+                    "error_type": e.__class__.__name__,
+                    "raw": raw
+                })
+
+        return {"message": f"Uploaded {len(submitted)} alerts", "workflows": submitted}
+
+    except Exception as e:
+        logger.error(f"Error processing batch alerts: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(e)}")
 
 @app.get("/api/alerts/sample")
 async def get_sample_alerts():
