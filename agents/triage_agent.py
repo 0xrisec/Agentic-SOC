@@ -2,7 +2,7 @@
 Triage Agent - Level 1 SOC Alert Triage and Noise Filtering
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 from langchain.prompts import ChatPromptTemplate
 from app.context import SOCWorkflowState, TriageResult, Verdict, AlertStatus
 from app.config import settings
@@ -16,7 +16,8 @@ class TriageAgent:
     
     def __init__(self):
         self.llm = get_llm(
-            temperature=settings.triage_temperature
+            temperature=settings.triage_temperature,
+            stream=True  # Enable streaming for real-time updates
         )
         self.prompt_template = self._load_prompt()
     
@@ -132,6 +133,48 @@ Provide your triage assessment in the following JSON format:
         except json.JSONDecodeError as e:
             # Fallback: try to extract information manually
             raise ValueError(f"Failed to parse triage response: {str(e)}")
+
+    def run(self, state: SOCWorkflowState, event_callback: Callable[[str, Dict[str, Any]], None] | None = None) -> TriageResult:
+        """
+        Run the triage process on the given state.
+
+        Args:
+            state: The current workflow state.
+            event_callback: Optional callback for streaming updates.
+
+        Returns:
+            TriageResult: The result of the triage process.
+        """
+        prompt = self.prompt_template.format(
+            alert_id=state.alert_id,
+            rule_id=state.rule_id,
+            rule_name=state.rule_name,
+            severity=state.severity,
+            timestamp=state.timestamp,
+            description=state.description,
+            tactics=state.tactics,
+            techniques=state.techniques,
+            host=state.host,
+            source_ip=state.source_ip,
+            destination_ip=state.destination_ip,
+            user=state.user
+        )
+
+        if event_callback:
+            event_callback("triage_stream_start", {"prompt": prompt})
+
+        result_stream = self.llm.stream(prompt)
+        triage_result = ""
+
+        for chunk in result_stream:
+            triage_result += chunk
+            if event_callback:
+                event_callback("triage_stream_update", {"chunk": chunk})
+
+        if event_callback:
+            event_callback("triage_stream_end", {"result": triage_result})
+
+        return TriageResult.parse_raw(triage_result)
 
 
 def create_triage_agent() -> TriageAgent:

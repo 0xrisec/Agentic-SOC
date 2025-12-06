@@ -12,7 +12,8 @@ from app.config import settings
 def get_llm(
     temperature: float = 0.7,
     model: Optional[str] = None,
-    provider: Optional[str] = None
+    provider: Optional[str] = None,
+    stream: bool = False
 ):
     """
     Factory function to create LLM instance based on configured provider.
@@ -21,6 +22,7 @@ def get_llm(
         temperature: Temperature setting for the LLM
         model: Specific model to use (overrides default from settings)
         provider: LLM provider to use (overrides default from settings)
+        stream: Whether to enable streaming responses
         
     Returns:
         LLM instance (ChatOpenAI or ChatGoogleGenerativeAI)
@@ -38,7 +40,8 @@ def get_llm(
         return ChatOpenAI(
             model=model or settings.openai_model,
             temperature=temperature,
-            api_key=settings.openai_api_key
+            api_key=settings.openai_api_key,
+            stream=stream
         )
 
     elif provider == "gemini":
@@ -48,11 +51,11 @@ def get_llm(
         return ChatGoogleGenerativeAI(
             model=model or settings.gemini_model,
             temperature=temperature,
-            google_api_key=settings.gemini_api_key
+            stream=stream
         )
 
     else:
-        raise ValueError(f"Unsupported provider: {provider}")
+        raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
 def get_current_provider() -> str:
