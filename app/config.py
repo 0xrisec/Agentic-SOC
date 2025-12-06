@@ -4,6 +4,7 @@ Loads environment variables and provides centralized config access.
 """
 
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import Optional
 
 
@@ -18,7 +19,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4-turbo-preview"
     
     # Gemini Configuration
-    gemini_api_key: Optional[str] = None
+    # Load Gemini key from env var GOOGLE_API_KEY for compatibility with langchain-google-genai
+    gemini_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
     gemini_model: str = "gemini-pro"
     
     # API Configuration

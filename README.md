@@ -1,4 +1,8 @@
-# uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+# Follow this step:
+python3 -m venv env
+source env/bin/activate
+pip3 install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 # 🛡️ Agentic SOC - AI-Powered Level 1 SOC Automation
 
