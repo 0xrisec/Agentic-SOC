@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2025-12-06T10:41:56.462593Z",
+  "alert_id": "ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+  "triage": {
+    "verdict": "true_positive",
+    "confidence": 0.95
+  },
+  "investigation": {
+    "risk_score": 8.5,
+    "findings_summary": "135 failed attempts from known malicious IP; coordinated spray observed across multiple IPs"
+  },
+  "threat_intel": {
+    "source_ip_confidence": "high",
+    "actor": "Opportunistic Attackers"
+  },
+  "final_verdict": "true_positive",
+  "priority": "P1",
+  "confidence": 0.95,
+  "rationale": "Confirmed credential access (T1110 Password Spray) against devops-vm with large failed login volume from a high-confidence malicious IP. Related spray activity from sibling IPs raises campaign likelihood and business risk to critical.",
+  "recommended_actions": [
+    "Block source IPs 194.169.175.17, 194.169.175.31, 45.151.99.126, 77.90.185.230, 77.90.185.231, 77.90.185.7",
+    "Review authentication logs for any successful logins",
+    "Force password reset for targeted accounts",
+    "Enable MFA on privileged accounts",
+    "Assess exposure of SSH/RDP to internet"
+  ],
+  "escalation_required": true,
+  "escalation_reason": "P1 true positive affecting critical DevOps infrastructure",
+  "estimated_impact": "HIGH: potential compromise of build pipelines, source code, and deployment credentials; possible supply-chain risk"
+}

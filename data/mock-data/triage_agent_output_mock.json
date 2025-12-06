@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2025-12-06T10:41:56.462593Z",
+  "alert_id": "ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+  "rule_id": "RULE-T1110-PASSWORD-SPRAY",
+  "rule_name": "Password spraying from single IP",
+  "severity": "High",
+  "description": "Detected 135 failed logons from 194.169.175.17 across 135 accounts within ~11 minutes on devops-vm",
+  "mitre": {
+    "tactics": [
+      "Credential Access"
+    ],
+    "techniques": [
+      "T1110"
+    ]
+  },
+  "assets": {
+    "host": "devops-vm",
+    "source_ip": "194.169.175.17"
+  },
+  "timestamp": "2024-10-17T16:31:59.557000Z",
+  "raw_event_sample": {
+    "event_id": 4625,
+    "logon_type_name": "3 - Network",
+    "accounts_sample": [
+      "elearningline",
+      "edgix",
+      "eclub",
+      "efnc",
+      "ecnp"
+    ]
+  },
+  "output": {
+    "verdict": "true_positive",
+    "confidence": 0.95,
+    "noise_score": 0.05,
+    "requires_investigation": true,
+    "key_indicators": [
+      "135 failures across 135 distinct accounts",
+      "External source IP 194.169.175.17",
+      "Short window and T1110 pattern",
+      "No successful auth from the source"
+    ],
+    "reasoning": "High-volume failures from an external IP matching password spray. Pattern and counts are consistent with Credential Access T1110; treat as active attack requiring investigation."
+  }
+}

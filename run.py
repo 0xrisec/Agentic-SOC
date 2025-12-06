@@ -6,6 +6,8 @@ Quick start script for Agentic SOC POC
 import sys
 import os
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -24,14 +26,23 @@ def check_environment():
         print("   # Then edit .env and add your OPENAI_API_KEY")
         return False
     
-    # Check if API key is set
-    from dotenv import load_dotenv
+    # Load environment variables from .env file
     load_dotenv()
     
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        print("❌ Error: OPENAI_API_KEY not configured!")
-        print("   Please edit .env and set your actual OpenAI API key.")
+    llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
+
+    if llm_provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            print("❌ Error: OPENAI_API_KEY not configured!")
+            return False
+    elif llm_provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key or api_key == "your_gemini_api_key_here":
+            print("❌ Error: GEMINI_API_KEY not configured!")
+            return False
+    else:
+        print(f"❌ Error: Unsupported LLM_PROVIDER '{llm_provider}'")
         return False
     
     print("✅ Environment configured correctly")
