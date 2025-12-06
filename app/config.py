@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_reload: bool = True
+    # CORS
+    # Note: Browsers disallow '*' when credentials are used. Provide explicit origins.
+    # Include 'null' to allow file:// based UI during local testing.
+    cors_allow_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "null",
+    ]
+    # Set to True if the frontend uses cookies/authorization with credentials.
+    cors_allow_credentials: bool = True
+    cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    cors_allow_headers: list[str] = ["*"]
     
     # Logging
     log_level: str = "INFO"

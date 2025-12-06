@@ -3,7 +3,8 @@ FastAPI Main Application - Agentic SOC POC
 Production-ready REST API for SOC alert processing
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -14,6 +15,8 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+import tempfile
+
 
 from app.context import (
     Alert, SOCWorkflowState, WorkflowSummary, SystemMetrics, 
@@ -36,13 +39,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware (avoid '*' with credentials; include 'null' for file://)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
 )
 
 # In-memory storage for demo (in production, use database)
@@ -50,7 +53,41 @@ workflows: Dict[str, SOCWorkflowState] = {}
 system_metrics = SystemMetrics()
 
 # Initialize orchestrator
-orchestrator = get_orchestrator()
+# WebSocket connection manager to broadcast workflow updates
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, workflow_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.setdefault(workflow_id, []).append(websocket)
+
+    def disconnect(self, workflow_id: str, websocket: WebSocket):
+        conns = self.active_connections.get(workflow_id, [])
+        if websocket in conns:
+            conns.remove(websocket)
+        if not conns:
+            self.active_connections.pop(workflow_id, None)
+
+    async def broadcast(self, workflow_id: str, message: Dict[str, Any]):
+        for ws in self.active_connections.get(workflow_id, []):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                # Best-effort; skip failures
+                pass
+
+
+manager = ConnectionManager()
+
+
+def _event_callback(workflow_id: str, payload: Dict[str, Any]):
+    # Background loop will await broadcast via loop.create_task; here use asyncio
+    import asyncio
+    asyncio.create_task(manager.broadcast(workflow_id, {"type": "progress", **payload}))
+
+
+orchestrator = get_orchestrator(event_callback=_event_callback)
 
 
 # Request/Response Models
@@ -74,6 +111,47 @@ class WorkflowStatusResponse(BaseModel):
 
 
 # API Endpoints
+@app.post("/api/upload-alert")
+async def upload_alert(file: UploadFile = File(...)):
+    """Upload a JSON file containing a single alert or list of alerts."""
+    try:
+        contents = await file.read()
+        data = json.loads(contents.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {str(e)}")
+
+    # Accept either single alert or list under key
+    alerts_payload = []
+    if isinstance(data, dict) and "alerts" in data and isinstance(data["alerts"], list):
+        alerts_payload = data["alerts"]
+    elif isinstance(data, list):
+        alerts_payload = data
+    elif isinstance(data, dict):
+        alerts_payload = [data]
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported alert JSON format")
+
+    submitted = []
+    for raw in alerts_payload:
+        try:
+            # Create Alert pydantic model
+            alert = Alert(**raw)
+            # Reuse existing process pipeline
+            req = ProcessAlertRequest(alert=alert)
+            # Generate ID and kick off processing inline (without BackgroundTasks here)
+            workflow_id = str(uuid.uuid4())
+            initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id)
+            workflows[workflow_id] = initial_state
+            # Start processing asynchronously
+            import asyncio
+            asyncio.create_task(process_workflow(workflow_id, initial_state))
+            # Notify
+            await manager.broadcast(workflow_id, {"type": "status", "stage": "submitted", "status": "processing"})
+            submitted.append({"workflow_id": workflow_id, "alert_id": alert.alert_id})
+        except Exception as e:
+            submitted.append({"error": f"Failed to submit alert: {str(e)}", "raw": raw})
+
+    return {"message": f"Uploaded {len(submitted)} alerts", "workflows": submitted}
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -82,6 +160,34 @@ async def root():
     if ui_path.exists():
         return FileResponse(ui_path)
     return HTMLResponse("<h1>Agentic SOC API</h1><p>Dashboard UI not found. Access API docs at <a href='/docs'>/docs</a></p>")
+
+# Mount static files for UI assets (CSS, JS)
+app.mount("/static", StaticFiles(directory="ui"), name="static")
+
+# Provide a favicon endpoint to avoid 404s (optional file)
+@app.get("/favicon.ico")
+async def favicon():
+    ico_path = Path("ui/favicon.ico")
+    if ico_path.exists():
+        return FileResponse(ico_path)
+    # No favicon available; return 204 to suppress 404 noise
+    from fastapi import Response
+    return Response(status_code=204)
+
+# Backward-compatible direct asset routes for clients requesting root paths
+@app.get("/styles.css")
+async def styles_css():
+    css_path = Path("ui/styles.css")
+    if css_path.exists():
+        return FileResponse(css_path)
+    raise HTTPException(status_code=404, detail="styles.css not found")
+
+@app.get("/dashboard.js")
+async def dashboard_js():
+    js_path = Path("ui/dashboard.js")
+    if js_path.exists():
+        return FileResponse(js_path)
+    raise HTTPException(status_code=404, detail="dashboard.js not found")
 
 
 @app.get("/health")
@@ -120,6 +226,9 @@ async def process_alert(request: ProcessAlertRequest, background_tasks: Backgrou
         
         # Process in background
         background_tasks.add_task(process_workflow, workflow_id, initial_state)
+
+        # Notify clients that workflow was created
+        await manager.broadcast(workflow_id, {"type": "status", "stage": "submitted", "status": "processing"})
         
         logger.info(f"Alert {request.alert.alert_id} submitted for processing (workflow: {workflow_id})")
         
@@ -150,12 +259,21 @@ async def process_workflow(workflow_id: str, state: SOCWorkflowState):
         update_system_metrics(final_state)
         
         logger.info(f"Completed processing for workflow {workflow_id}")
+        # Emit final status
+        await manager.broadcast(workflow_id, {
+            "type": "final",
+            "status": final_state.status,
+            "verdict": final_state.decision_result.final_verdict if final_state.decision_result else None,
+            "priority": final_state.decision_result.priority if final_state.decision_result else None,
+            "errors": final_state.errors,
+        })
         
     except Exception as e:
         logger.error(f"Error processing workflow {workflow_id}: {str(e)}")
         state.errors.append(f"Workflow processing error: {str(e)}")
         state.status = AlertStatus.FAILED
         workflows[workflow_id] = state
+        await manager.broadcast(workflow_id, {"type": "final", "status": "failed", "error": str(e)})
 
 
 def update_system_metrics(state: SOCWorkflowState):
@@ -235,6 +353,26 @@ async def get_workflow_status(workflow_id: str, include_details: bool = False):
         }
     
     return WorkflowStatusResponse(workflow=summary, details=details)
+
+
+@app.websocket("/ws/{workflow_id}")
+async def websocket_endpoint(websocket: WebSocket, workflow_id: str):
+    """WebSocket to stream live workflow updates to the UI."""
+    await manager.connect(workflow_id, websocket)
+    try:
+        # Optionally send initial status if exists
+        if workflow_id in workflows:
+            state = workflows[workflow_id]
+            await websocket.send_json({
+                "type": "status",
+                "status": state.status,
+                "current_agent": state.current_agent,
+            })
+        # Keep connection open; client may send pings
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(workflow_id, websocket)
 
 
 @app.get("/api/alerts/list")

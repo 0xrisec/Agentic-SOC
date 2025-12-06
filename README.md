@@ -1,3 +1,5 @@
+# uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
 # 🛡️ Agentic SOC - AI-Powered Level 1 SOC Automation
 
 ## End-to-End Proof of Concept

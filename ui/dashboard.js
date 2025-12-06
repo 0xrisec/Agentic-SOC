@@ -1,8 +1,10 @@
 // Agentic SOC Dashboard JavaScript
 
-const API_BASE = '';
+const API_BASE = window.location.origin || 'http://localhost:8000';
 let autoRefreshInterval = null;
 let workflows = [];
+// Track active WebSocket connections globally
+const wsConnections = {};
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,6 +22,31 @@ async function initializeDashboard() {
 // Setup event listeners
 function setupEventListeners() {
     document.getElementById('loadSampleBtn').addEventListener('click', loadSampleAlerts);
+    // Upload controls
+    const uploadInput = document.getElementById('uploadInput');
+    document.getElementById('uploadSubmitBtn').addEventListener('click', async () => {
+        if (!uploadInput.files || uploadInput.files.length === 0) {
+            showToast('Please select a JSON file to upload', 'warning');
+            return;
+        }
+        const file = uploadInput.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        showLoading(true);
+        try {
+            const resp = await fetch(`${API_BASE}/api/upload-alert`, { method: 'POST', body: formData });
+            const data = await resp.json();
+            showToast(`Uploaded: ${data.message}`, 'success');
+            // Connect websockets for newly submitted workflows
+            (data.workflows || []).forEach(w => connectWorkflowWebSocket(w.workflow_id));
+            await loadWorkflows();
+        } catch (e) {
+            console.error('Upload failed', e);
+            showToast('Upload failed', 'error');
+        } finally {
+            showLoading(false);
+        }
+    });
     document.getElementById('refreshBtn').addEventListener('click', () => {
         loadMetrics();
         loadWorkflows();
@@ -99,10 +126,56 @@ async function loadWorkflows() {
         const data = await response.json();
         
         workflows = data.workflows || [];
+        // Ensure websockets connected for active workflows
+        workflows.forEach(wf => {
+            if (wf.status !== 'COMPLETED' && wf.status !== 'FAILED' && wf.workflow_id) {
+                connectWorkflowWebSocket(wf.workflow_id);
+            }
+        });
         renderWorkflowsTable(workflows);
     } catch (error) {
         console.error('Error loading workflows:', error);
         showToast('Error loading workflows', 'error');
+    }
+}
+
+// Connect to WebSocket for a workflow and handle live updates
+function connectWorkflowWebSocket(workflowId) {
+    if (!workflowId || wsConnections[workflowId]) return; // already connected
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}/ws/${workflowId}`;
+    try {
+        const ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+            wsConnections[workflowId] = ws;
+            // Optionally send a ping
+            try { ws.send('ping'); } catch {}
+        };
+        ws.onmessage = (evt) => {
+            let msg = null;
+            try { msg = JSON.parse(evt.data); } catch { return; }
+            if (msg.type === 'progress') {
+                // Show agent stage transitions
+                showToast(`Workflow ${workflowId}: ${msg.stage} ${msg.status}`, 'info');
+            }
+            if (msg.type === 'final') {
+                showToast(`Workflow ${workflowId} completed: ${msg.status}`, 'success');
+                // Refresh to show final status and LLM results
+                loadMetrics();
+                loadWorkflows();
+                // Close ws
+                try { ws.close(); } catch {}
+                delete wsConnections[workflowId];
+            }
+        };
+        ws.onerror = () => {
+            // Ignore errors, will rely on polling
+        };
+        ws.onclose = () => {
+            delete wsConnections[workflowId];
+        };
+    } catch (e) {
+        console.warn('WS connect failed', e);
     }
 }
 

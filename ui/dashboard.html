@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agentic SOC - AI-Powered Alert Triage Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="dashboard-container">
@@ -17,6 +17,9 @@
                 </div>
                 <div class="header-actions">
                     <button id="loadSampleBtn" class="btn btn-secondary">Load Sample Alerts</button>
+                    <label class="btn btn-secondary" for="uploadInput">Upload Alerts</label>
+                    <input id="uploadInput" type="file" accept="application/json" style="display:none" />
+                    <button id="uploadSubmitBtn" class="btn btn-primary">Submit Upload</button>
                     <button id="refreshBtn" class="btn btn-primary">↻ Refresh</button>
                     <button id="clearBtn" class="btn btn-danger">Clear All</button>
                 </div>
@@ -160,6 +163,6 @@
         <div id="toastContainer" class="toast-container"></div>
     </div>
 
-    <script src="dashboard.js"></script>
+    <script src="/static/dashboard.js"></script>
 </body>
 </html>

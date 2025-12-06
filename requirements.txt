@@ -8,10 +8,11 @@ langgraph==0.0.41
 langchain==0.1.9
 langchain-openai==0.0.5
 langchain-google-genai==1.0.1
-langchain-community==0.0.20
+langchain-community==0.0.21
 
-# Data Processing
-pydantic==2.5.3
+# Data Processing (ensure wheels available for macOS/Python versions)
+# Use pydantic which will pull a compatible pydantic-core automatically
+pydantic==2.8.2
 pydantic-settings==2.1.0
 
 # Async and Utilities
@@ -28,4 +29,4 @@ python-json-logger==2.0.7
 httpx==0.26.0
 
 # Environment
-python-dotenv==1.0.0
+# (python-dotenv already listed above)
