@@ -4,6 +4,7 @@ let currentFile = null;
 let isAnalysisRunning = false;
 let currentAgentIndex = 0;
 let pollingInterval = null;
+let ws = null;
 
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
@@ -182,8 +183,12 @@ async function runAnalysis() {
         const data = await response.json();
         
         if (data.success) {
-            // Start polling for updates
-            startPolling();
+            // Prefer WebSocket realtime updates if available
+            if (data.workflow_id) {
+                startRealtime(data.workflow_id);
+            } else {
+                startPolling();
+            }
         } else {
             throw new Error(data.message || 'Analysis failed');
         }
@@ -219,6 +224,100 @@ function startPolling() {
             console.error('Polling error:', error);
         }
     }, 500);
+}
+
+function startRealtime(workflowId) {
+    // Close any existing connection
+    if (ws) {
+        try { ws.close(); } catch (_) {}
+        ws = null;
+    }
+    // Fallback: if WebSocket unavailable, use polling
+    const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const url = `${protocol}://${location.host}/ws/${workflowId}`;
+    try {
+        ws = new WebSocket(url);
+    } catch (e) {
+        console.warn('WebSocket failed, falling back to polling:', e);
+        startPolling();
+        return;
+    }
+
+    ws.onopen = () => {
+        // Optional: send a ping to keep connection
+        try { ws.send('ping'); } catch (_) {}
+    };
+
+    ws.onmessage = (event) => {
+        let payload = null;
+        try {
+            payload = JSON.parse(event.data);
+        } catch (e) {
+            return;
+        }
+
+        // Normalize payload to UI-V2 shape
+        const data = { activities: [] };
+        if (payload.type === 'status') {
+            // Initial or status updates
+            data.currentAgent = payload.current_agent || null;
+            data.progress = 10; // minimal progress indicator on status
+        } else if (payload.type === 'progress') {
+            data.currentAgent = payload.current_agent || null;
+            data.agentStatus = payload.agent_status || null;
+            data.progress = typeof payload.progress === 'number' ? payload.progress : 50;
+            if (payload.message) {
+                data.activities.push({
+                    agent: payload.agent || 'System',
+                    message: payload.message,
+                    type: payload.level || 'info',
+                    timestamp: payload.timestamp || null
+                });
+            }
+        } else if (payload.type === 'final') {
+            // Final results
+            data.completed = true;
+            data.progress = 100;
+            data.results = {
+                severity: payload.priority || null,
+                recommendation: payload.verdict || null,
+            };
+            if (payload.errors && payload.errors.length) {
+                data.activities.push({
+                    agent: 'System',
+                    message: `Completed with errors: ${payload.errors.join(', ')}`,
+                    type: 'error',
+                    timestamp: null
+                });
+            } else {
+                data.activities.push({
+                    agent: 'System',
+                    message: 'Analysis completed successfully',
+                    type: 'success',
+                    timestamp: null
+                });
+            }
+        }
+
+        updateProgress(data);
+        if (data.completed) {
+            showResults(data.results);
+            try { ws.close(); } catch (_) {}
+            ws = null;
+        }
+    };
+
+    ws.onerror = (err) => {
+        console.warn('WebSocket error, switching to polling:', err);
+        // Use polling as backup
+        try { ws.close(); } catch (_) {}
+        ws = null;
+        startPolling();
+    };
+
+    ws.onclose = () => {
+        // No-op; if not completed, polling will continue
+    };
 }
 
 function updateProgress(data) {

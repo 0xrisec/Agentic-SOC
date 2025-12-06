@@ -80,11 +80,68 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Event queue for async broadcasting
+event_queue: Dict[str, list] = {}
 
 def _event_callback(workflow_id: str, payload: Dict[str, Any]):
-    # Background loop will await broadcast via loop.create_task; here use asyncio
-    import asyncio
-    asyncio.create_task(manager.broadcast(workflow_id, {"type": "progress", **payload}))
+    """Queue events for async broadcasting - called from orchestrator"""
+    if workflow_id not in event_queue:
+        event_queue[workflow_id] = []
+    
+    # Normalize payload for UI-V2 consumers
+    normalized = {"type": "progress"}
+    normalized.update(payload)
+    
+    # Map stage/status to UI fields
+    stage = payload.get("stage")
+    status = payload.get("status")
+    
+    if stage in {"triage", "investigation", "decision", "response"}:
+        normalized["current_agent"] = stage
+        agent_status = {
+            "triage": "waiting",
+            "investigation": "waiting",
+            "decision": "waiting",
+            "response": "waiting"
+        }
+        
+        if status == "started":
+            agent_status[stage] = "running"
+            normalized["progress"] = {
+                "triage": 15,
+                "investigation": 40,
+                "decision": 65,
+                "response": 85
+            }.get(stage, 10)
+            normalized["message"] = f"Starting {stage} analysis..."
+            normalized["agent"] = stage.capitalize() + " Agent"
+            normalized["level"] = "processing"
+        elif status == "completed":
+            agent_status[stage] = "completed"
+            normalized["progress"] = {
+                "triage": 25,
+                "investigation": 50,
+                "decision": 75,
+                "response": 95
+            }.get(stage, 50)
+            normalized["message"] = f"{stage.capitalize()} completed"
+            normalized["agent"] = stage.capitalize() + " Agent"
+            normalized["level"] = "success"
+        elif status == "failed":
+            agent_status[stage] = "error"
+            normalized["progress"] = 100
+            normalized["message"] = f"{stage.capitalize()} error: {payload.get('error', 'Unknown error')}"
+            normalized["agent"] = stage.capitalize() + " Agent"
+            normalized["level"] = "error"
+            
+        normalized["agent_status"] = agent_status
+    
+    # Add timestamp
+    normalized["timestamp"] = datetime.utcnow().strftime("%H:%M:%S")
+    
+    # Queue the event
+    event_queue[workflow_id].append(normalized)
+    logger.info(f"Event queued for {workflow_id}: {stage} - {status}")
 
 
 orchestrator = get_orchestrator(event_callback=_event_callback)
@@ -443,8 +500,28 @@ async def process_workflow(workflow_id: str, state: SOCWorkflowState):
     try:
         logger.info(f"Starting background processing for workflow {workflow_id}")
         
+        # Initialize event queue for this workflow
+        event_queue[workflow_id] = []
+        
+        # Broadcast initial status
+        await manager.broadcast(workflow_id, {
+            "type": "status",
+            "status": "processing",
+            "current_agent": None,
+            "message": "Starting analysis",
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        })
+        
         # Process through orchestrator
         final_state = await orchestrator.process_alert(state)
+        
+        # Broadcast all queued events
+        if workflow_id in event_queue:
+            for event in event_queue[workflow_id]:
+                await manager.broadcast(workflow_id, event)
+                # Small delay to ensure order
+                import asyncio
+                await asyncio.sleep(0.1)
         
         # Update stored workflow
         workflows[workflow_id] = final_state
@@ -453,21 +530,42 @@ async def process_workflow(workflow_id: str, state: SOCWorkflowState):
         update_system_metrics(final_state)
         
         logger.info(f"Completed processing for workflow {workflow_id}")
+        
         # Emit final status
-        await manager.broadcast(workflow_id, {
+        final_message = {
             "type": "final",
-            "status": final_state.status,
-            "verdict": final_state.decision_result.final_verdict if final_state.decision_result else None,
-            "priority": final_state.decision_result.priority if final_state.decision_result else None,
+            "status": final_state.status.value if final_state.status else "completed",
+            "verdict": final_state.decision_result.final_verdict.value if final_state.decision_result and final_state.decision_result.final_verdict else None,
+            "priority": final_state.decision_result.priority.value if final_state.decision_result and final_state.decision_result.priority else None,
             "errors": final_state.errors,
-        })
+            "completed": True,
+            "progress": 100,
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        }
+        
+        await manager.broadcast(workflow_id, final_message)
+        
+        # Clean up event queue
+        if workflow_id in event_queue:
+            del event_queue[workflow_id]
         
     except Exception as e:
         logger.error(f"Error processing workflow {workflow_id}: {str(e)}")
         state.errors.append(f"Workflow processing error: {str(e)}")
         state.status = AlertStatus.FAILED
         workflows[workflow_id] = state
-        await manager.broadcast(workflow_id, {"type": "final", "status": "failed", "error": str(e)})
+        await manager.broadcast(workflow_id, {
+            "type": "final",
+            "status": "failed",
+            "error": str(e),
+            "completed": True,
+            "progress": 100,
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        })
+        
+        # Clean up event queue
+        if workflow_id in event_queue:
+            del event_queue[workflow_id]
 
 
 def update_system_metrics(state: SOCWorkflowState):
@@ -786,8 +884,8 @@ async def upload_and_run(file: UploadFile = File(...), background_tasks: Backgro
         # Store workflow
         workflows[workflow_id] = initial_state
         
-        # Process in background
-        background_tasks.add_task(process_workflow_ui_v2, workflow_id, initial_state)
+        # Process in background using unified workflow
+        background_tasks.add_task(process_workflow, workflow_id, initial_state)
         
         return {
             "success": True,
@@ -800,99 +898,77 @@ async def upload_and_run(file: UploadFile = File(...), background_tasks: Backgro
         return {"success": False, "message": str(e)}
 
 
-async def process_workflow_ui_v2(workflow_id: str, state: SOCWorkflowState):
-    """Background task to process workflow with UI-V2 status updates"""
-    try:
-        logger.info(f"Starting UI-V2 workflow processing for {workflow_id}")
-        
-        # Update progress through agents
-        agent_sequence = [
-            ("triage", "Triage Agent", 25),
-            ("investigation", "Investigation Agent", 50),
-            ("decision", "Decision Agent", 75),
-            ("response", "Response Agent", 100)
-        ]
-        
-        # Process through orchestrator with custom event handling
-        for agent_key, agent_name, progress_target in agent_sequence:
-            # Update status
-            current_analysis["currentAgent"] = agent_key
-            current_analysis["agentStatus"][agent_key] = "running"
-            current_analysis["progress"] = progress_target - 10
-            
-            # Add activity
-            current_analysis["activities"].append({
-                "agent": agent_name,
-                "message": f"Starting {agent_name.lower()} analysis...",
-                "type": "processing",
-                "timestamp": datetime.utcnow().strftime("%H:%M:%S")
-            })
-        
-        # Process through orchestrator
-        final_state = await orchestrator.process_alert(state)
-        
-        # Mark all agents as completed
-        for agent_key, agent_name, progress_target in agent_sequence:
-            current_analysis["agentStatus"][agent_key] = "completed"
-            current_analysis["activities"].append({
-                "agent": agent_name,
-                "message": f"{agent_name} completed successfully",
-                "type": "success",
-                "timestamp": datetime.utcnow().strftime("%H:%M:%S")
-            })
-        
-        # Update stored workflow
-        workflows[workflow_id] = final_state
-        
-        # Update metrics
-        update_system_metrics(final_state)
-        
-        # Set final progress
-        current_analysis["progress"] = 100
-        current_analysis["completed"] = True
-        
-        # Format results
-        results = {}
-        if final_state.decision_result:
-            results["severity"] = final_state.decision_result.priority.value if final_state.decision_result.priority else "unknown"
-            results["recommendation"] = final_state.decision_result.final_verdict.value if final_state.decision_result.final_verdict else "No verdict"
-            
-        if final_state.response_result and final_state.response_result.actions:
-            results["actions"] = final_state.response_result.actions
-            
-        if final_state.triage_result:
-            results["summary"] = final_state.triage_result.reasoning or "Analysis completed"
-            
-        current_analysis["results"] = results
-        
-        # Final activity
-        current_analysis["activities"].append({
-            "agent": "System",
-            "message": "Analysis completed successfully",
-            "type": "success",
-            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
-        })
-        
-        logger.info(f"Completed UI-V2 workflow processing for {workflow_id}")
-        
-    except Exception as e:
-        logger.error(f"Error processing UI-V2 workflow {workflow_id}: {str(e)}")
-        current_analysis["completed"] = True
-        current_analysis["activities"].append({
-            "agent": "System",
-            "message": f"Error: {str(e)}",
-            "type": "error",
-            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
-        })
-
-
 @app.get("/api/status")
 async def get_analysis_status():
     """
-    Get current analysis status for UI-V2
+    Get current analysis status - fallback for polling when WebSocket not available
     Returns progress, current agent, activities, and results
     """
-    return current_analysis
+    # Get most recent workflow if available
+    if not workflows:
+        return {
+            "workflow_id": None,
+            "progress": 0,
+            "currentAgent": None,
+            "agentStatus": {
+                "triage": "waiting",
+                "investigation": "waiting",
+                "decision": "waiting",
+                "response": "waiting"
+            },
+            "activities": [],
+            "completed": False,
+            "results": None
+        }
+    
+    # Get the most recent workflow (for UI-V2 compatibility)
+    workflow_id = current_analysis.get("workflow_id") or list(workflows.keys())[-1]
+    state = workflows.get(workflow_id)
+    
+    if not state:
+        return current_analysis
+    
+    # Build response from workflow state
+    response = {
+        "workflow_id": workflow_id,
+        "progress": 0,
+        "currentAgent": state.current_agent,
+        "agentStatus": {
+            "triage": "waiting",
+            "investigation": "waiting",
+            "decision": "waiting",
+            "response": "waiting"
+        },
+        "activities": [],
+        "completed": state.status in [AlertStatus.COMPLETED, AlertStatus.FAILED],
+        "results": None
+    }
+    
+    # Update agent status based on completed stages
+    if state.triage_result:
+        response["agentStatus"]["triage"] = "completed"
+        response["progress"] = 25
+    if state.investigation_result:
+        response["agentStatus"]["investigation"] = "completed"
+        response["progress"] = 50
+    if state.decision_result:
+        response["agentStatus"]["decision"] = "completed"
+        response["progress"] = 75
+    if state.response_result:
+        response["agentStatus"]["response"] = "completed"
+        response["progress"] = 100
+    
+    # Format results
+    if response["completed"] and state.decision_result:
+        response["results"] = {
+            "severity": state.decision_result.priority.value if state.decision_result.priority else "unknown",
+            "recommendation": state.decision_result.final_verdict.value if state.decision_result.final_verdict else "No verdict",
+            "summary": state.triage_result.reasoning if state.triage_result else "Analysis completed"
+        }
+        if state.response_result and state.response_result.actions:
+            response["results"]["actions"] = state.response_result.actions
+    
+    return response
 
 
 # ============================================================================

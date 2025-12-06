@@ -1,4 +1,5 @@
 # uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+source .venv312/bin/activate
 
 # 🛡️ Agentic SOC - AI-Powered Level 1 SOC Automation
 
