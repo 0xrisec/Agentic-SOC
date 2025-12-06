@@ -110,6 +110,84 @@ class WorkflowStatusResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+# Helper Functions
+def normalize_alert_data(alert_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize alert data to fix common validation issues
+    - Add missing timestamp field
+    - Convert severity to lowercase
+    - Map field names to expected schema
+    - Add default values for optional fields
+    """
+    normalized = alert_data.copy()
+    
+    # Fix severity - convert to lowercase (High -> high, Critical -> critical, etc.)
+    if "severity" in normalized:
+        severity_str = str(normalized["severity"]).lower()
+        # Map common variations
+        severity_map = {
+            "informational": "info",
+            "information": "info",
+            "inf": "info"
+        }
+        normalized["severity"] = severity_map.get(severity_str, severity_str)
+    else:
+        normalized["severity"] = "medium"  # Default
+    
+    # Add timestamp if missing - try to extract from evidence or use current time
+    if "timestamp" not in normalized:
+        # Try to get first event time from evidence_sample
+        if "evidence_sample" in normalized and len(normalized["evidence_sample"]) > 0:
+            first_event = normalized["evidence_sample"][0]
+            if "time_utc" in first_event:
+                normalized["timestamp"] = first_event["time_utc"]
+            else:
+                normalized["timestamp"] = datetime.utcnow().isoformat()
+        else:
+            normalized["timestamp"] = datetime.utcnow().isoformat()
+    
+    # Ensure required fields exist
+    if "alert_id" not in normalized:
+        normalized["alert_id"] = f"ALERT-{uuid.uuid4().hex[:8].upper()}"
+    
+    if "rule_id" not in normalized:
+        normalized["rule_id"] = normalized.get("alert_id", "UNKNOWN")
+    
+    if "description" not in normalized:
+        normalized["description"] = normalized.get("title", "No description provided")
+    
+    # Map MITRE data - handle both nested and flat structures
+    if "mitre" not in normalized:
+        mitre_data = {
+            "tactics": normalized.get("tactics", []),
+            "techniques": normalized.get("techniques", [])
+        }
+        normalized["mitre"] = mitre_data
+    
+    # Map assets - handle various field names
+    if "assets" not in normalized:
+        entities = normalized.get("entities", {})
+        assets_data = {
+            "host": entities.get("host"),
+            "source_ip": entities.get("source_ip"),
+            "destination_ip": entities.get("destination_ip"),
+            "user": entities.get("user") or entities.get("account")
+        }
+        normalized["assets"] = assets_data
+    
+    # Store original data in raw_data
+    if "raw_data" not in normalized:
+        # Store evidence and other non-standard fields
+        raw_data = {}
+        for key in ["evidence_sample", "time_window_minutes", "thresholds", "entities", 
+                    "category", "title", "tactics", "techniques"]:
+            if key in normalized:
+                raw_data[key] = normalized[key]
+        normalized["raw_data"] = raw_data
+    
+    return normalized
+
+
 # API Endpoints
 @app.post("/api/upload-alert")
 async def upload_alert(file: UploadFile = File(...)):
@@ -134,6 +212,8 @@ async def upload_alert(file: UploadFile = File(...)):
     submitted = []
     for raw in alerts_payload:
         try:
+            # Normalize alert data
+            raw = normalize_alert_data(raw)
             # Create Alert pydantic model
             alert = Alert(**raw)
             # Reuse existing process pipeline
@@ -155,11 +235,125 @@ async def upload_alert(file: UploadFile = File(...)):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the dashboard UI"""
-    ui_path = Path("ui/dashboard.html")
-    if ui_path.exists():
-        return FileResponse(ui_path)
-    return HTMLResponse("<h1>Agentic SOC API</h1><p>Dashboard UI not found. Access API docs at <a href='/docs'>/docs</a></p>")
+    """Serve landing page with UI options"""
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Agentic SOC - AI-Powered SOC Automation</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+                color: #fff;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+            }
+            .container {
+                text-align: center;
+                max-width: 800px;
+                padding: 40px;
+            }
+            h1 {
+                font-size: 48px;
+                margin-bottom: 20px;
+                background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            p {
+                font-size: 18px;
+                color: #9ca3af;
+                margin-bottom: 40px;
+            }
+            .options {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin-bottom: 40px;
+            }
+            .option {
+                background: rgba(99, 102, 241, 0.1);
+                border: 2px solid rgba(99, 102, 241, 0.3);
+                border-radius: 12px;
+                padding: 30px;
+                text-decoration: none;
+                color: #fff;
+                transition: all 0.3s ease;
+            }
+            .option:hover {
+                transform: translateY(-5px);
+                border-color: #6366f1;
+                background: rgba(99, 102, 241, 0.2);
+                box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+            }
+            .option h3 {
+                margin: 0 0 10px 0;
+                font-size: 24px;
+            }
+            .option p {
+                margin: 0;
+                font-size: 14px;
+                color: #9ca3af;
+            }
+            .badge {
+                display: inline-block;
+                background: #10b981;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-left: 10px;
+            }
+            .links {
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                flex-wrap: wrap;
+            }
+            .links a {
+                color: #6366f1;
+                text-decoration: none;
+                padding: 10px 20px;
+                border: 1px solid #6366f1;
+                border-radius: 6px;
+                transition: all 0.3s ease;
+            }
+            .links a:hover {
+                background: #6366f1;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🛡️ Agentic SOC</h1>
+            <p>AI-Powered Level 1 SOC Automation with Multi-Agent Intelligence</p>
+            
+            <div class="options">
+                <a href="/ui-v2/index.html" class="option">
+                    <h3>New Dashboard <span class="badge">V2</span></h3>
+                    <p>Professional Copilot-inspired UI with real-time agent tracking</p>
+                </a>
+                
+                <a href="/ui/dashboard.html" class="option">
+                    <h3>Classic Dashboard</h3>
+                    <p>Original dashboard interface</p>
+                </a>
+            </div>
+            
+            <div class="links">
+                <a href="/docs">📚 API Documentation</a>
+                <a href="/health">🔍 Health Check</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """)
 
 # Mount static files for UI assets (CSS, JS)
 app.mount("/static", StaticFiles(directory="ui"), name="static")
@@ -506,7 +700,213 @@ async def clear_workflows():
     return {"message": "All workflows cleared successfully"}
 
 
-# Mount static files for UI
+# ============================================================================
+# UI-V2 API Endpoints - For the new professional Copilot-like UI
+# ============================================================================
+
+# Global state for UI-V2
+current_analysis = {
+    "workflow_id": None,
+    "progress": 0,
+    "currentAgent": None,
+    "agentStatus": {},
+    "activities": [],
+    "completed": False,
+    "results": None
+}
+
+@app.post("/api/upload-and-run")
+async def upload_and_run(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+    """
+    Upload alert file and start analysis for UI-V2
+    Returns immediately and processing happens in background
+    """
+    try:
+        # Reset current analysis state
+        current_analysis.clear()
+        current_analysis.update({
+            "workflow_id": None,
+            "progress": 0,
+            "currentAgent": None,
+            "agentStatus": {
+                "triage": "waiting",
+                "investigation": "waiting",
+                "decision": "waiting",
+                "response": "waiting"
+            },
+            "activities": [],
+            "completed": False,
+            "results": None
+        })
+        
+        # Read and parse file
+        contents = await file.read()
+        data = json.loads(contents.decode("utf-8"))
+        
+        # Extract alert data
+        alerts_payload = []
+        if isinstance(data, dict) and "alerts" in data and isinstance(data["alerts"], list):
+            alerts_payload = data["alerts"]
+        elif isinstance(data, list):
+            alerts_payload = data
+        elif isinstance(data, dict):
+            alerts_payload = [data]
+        else:
+            return {"success": False, "message": "Invalid alert file format"}
+        
+        if not alerts_payload:
+            return {"success": False, "message": "No alerts found in file"}
+        
+        # Process first alert only for demo
+        alert_data = alerts_payload[0]
+        
+        # Normalize alert data to fix common issues
+        alert_data = normalize_alert_data(alert_data)
+        
+        alert = Alert(**alert_data)
+        
+        # Generate workflow ID
+        workflow_id = str(uuid.uuid4())
+        current_analysis["workflow_id"] = workflow_id
+        
+        # Add initial activity
+        current_analysis["activities"].append({
+            "agent": "System",
+            "message": f"Starting analysis for alert {alert.alert_id}",
+            "type": "start",
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        })
+        
+        # Create initial workflow state
+        initial_state = SOCWorkflowState(
+            alert=alert,
+            workflow_id=workflow_id
+        )
+        
+        # Store workflow
+        workflows[workflow_id] = initial_state
+        
+        # Process in background
+        background_tasks.add_task(process_workflow_ui_v2, workflow_id, initial_state)
+        
+        return {
+            "success": True,
+            "message": "Analysis started",
+            "workflow_id": workflow_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in upload-and-run: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+
+async def process_workflow_ui_v2(workflow_id: str, state: SOCWorkflowState):
+    """Background task to process workflow with UI-V2 status updates"""
+    try:
+        logger.info(f"Starting UI-V2 workflow processing for {workflow_id}")
+        
+        # Update progress through agents
+        agent_sequence = [
+            ("triage", "Triage Agent", 25),
+            ("investigation", "Investigation Agent", 50),
+            ("decision", "Decision Agent", 75),
+            ("response", "Response Agent", 100)
+        ]
+        
+        # Process through orchestrator with custom event handling
+        for agent_key, agent_name, progress_target in agent_sequence:
+            # Update status
+            current_analysis["currentAgent"] = agent_key
+            current_analysis["agentStatus"][agent_key] = "running"
+            current_analysis["progress"] = progress_target - 10
+            
+            # Add activity
+            current_analysis["activities"].append({
+                "agent": agent_name,
+                "message": f"Starting {agent_name.lower()} analysis...",
+                "type": "processing",
+                "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+            })
+        
+        # Process through orchestrator
+        final_state = await orchestrator.process_alert(state)
+        
+        # Mark all agents as completed
+        for agent_key, agent_name, progress_target in agent_sequence:
+            current_analysis["agentStatus"][agent_key] = "completed"
+            current_analysis["activities"].append({
+                "agent": agent_name,
+                "message": f"{agent_name} completed successfully",
+                "type": "success",
+                "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+            })
+        
+        # Update stored workflow
+        workflows[workflow_id] = final_state
+        
+        # Update metrics
+        update_system_metrics(final_state)
+        
+        # Set final progress
+        current_analysis["progress"] = 100
+        current_analysis["completed"] = True
+        
+        # Format results
+        results = {}
+        if final_state.decision_result:
+            results["severity"] = final_state.decision_result.priority.value if final_state.decision_result.priority else "unknown"
+            results["recommendation"] = final_state.decision_result.final_verdict.value if final_state.decision_result.final_verdict else "No verdict"
+            
+        if final_state.response_result and final_state.response_result.actions:
+            results["actions"] = final_state.response_result.actions
+            
+        if final_state.triage_result:
+            results["summary"] = final_state.triage_result.reasoning or "Analysis completed"
+            
+        current_analysis["results"] = results
+        
+        # Final activity
+        current_analysis["activities"].append({
+            "agent": "System",
+            "message": "Analysis completed successfully",
+            "type": "success",
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        })
+        
+        logger.info(f"Completed UI-V2 workflow processing for {workflow_id}")
+        
+    except Exception as e:
+        logger.error(f"Error processing UI-V2 workflow {workflow_id}: {str(e)}")
+        current_analysis["completed"] = True
+        current_analysis["activities"].append({
+            "agent": "System",
+            "message": f"Error: {str(e)}",
+            "type": "error",
+            "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+        })
+
+
+@app.get("/api/status")
+async def get_analysis_status():
+    """
+    Get current analysis status for UI-V2
+    Returns progress, current agent, activities, and results
+    """
+    return current_analysis
+
+
+# ============================================================================
+# Static File Mounts
+# ============================================================================
+
+# Mount UI-V2 (new professional UI)
+try:
+    app.mount("/ui-v2", StaticFiles(directory="ui-v2"), name="ui-v2")
+    logger.info("Mounted UI-V2 at /ui-v2")
+except Exception as e:
+    logger.warning(f"Could not mount UI-V2 static files: {str(e)}")
+
+# Mount original UI
 try:
     app.mount("/ui", StaticFiles(directory="ui"), name="ui")
 except Exception as e:

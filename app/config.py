@@ -11,7 +11,11 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # LLM Provider Configuration
-    llm_provider: str = "openai"  # Supported: openai, gemini
+    # Supported providers:
+    # - "openai": OpenAI GPT models (requires OPENAI_API_KEY)
+    # - "gemini": Google Gemini models (requires GEMINI_API_KEY)  
+    # - "mock" or "mock-data": Mock LLM with realistic test data (no API key required)
+    llm_provider: str = "mock-data"  # Default to mock-data for easy testing
     
     # OpenAI Configuration
     openai_api_key: Optional[str] = None

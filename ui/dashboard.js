@@ -1,9 +1,9 @@
-// Agentic SOC Dashboard JavaScript
-
+// Agentic SOC Dashboard JavaScript (scoped to avoid globals)
+(function () {
 const API_BASE = window.location.origin || 'http://localhost:8000';
 let autoRefreshInterval = null;
 let workflows = [];
-// Track active WebSocket connections globally
+// Track active WebSocket connections globally (scoped)
 const wsConnections = {};
 
 // Initialize dashboard on page load
@@ -35,416 +35,87 @@ function setupEventListeners() {
         showLoading(true);
         try {
             const resp = await fetch(`${API_BASE}/api/upload-alert`, { method: 'POST', body: formData });
+            if (!resp.ok) {
+                const text = await resp.text();
+                showToast(`Upload failed (${resp.status}): ${text}`, 'error');
+                showLoading(false);
+                return;
+            }
             const data = await resp.json();
-            showToast(`Uploaded: ${data.message}`, 'success');
-            // Connect websockets for newly submitted workflows
-            (data.workflows || []).forEach(w => connectWorkflowWebSocket(w.workflow_id));
-            await loadWorkflows();
+            showToast('Alert uploaded and processing started', 'success');
+            // Optionally refresh metrics/workflows shortly after upload
+            setTimeout(() => {
+                loadMetrics();
+                loadWorkflows();
+            }, 1500);
+            showLoading(false);
         } catch (e) {
-            console.error('Upload failed', e);
-            showToast('Upload failed', 'error');
-        } finally {
+            console.error('Upload error:', e);
+            showToast('Upload error', 'error');
             showLoading(false);
         }
     });
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-        loadMetrics();
-        loadWorkflows();
-    });
-    document.getElementById('clearBtn').addEventListener('click', clearAllWorkflows);
-    document.getElementById('autoRefresh').addEventListener('change', toggleAutoRefresh);
-    document.getElementById('statusFilter').addEventListener('change', loadWorkflows);
-    document.getElementById('priorityFilter').addEventListener('change', loadWorkflows);
-    
-    // Modal close
-    document.querySelector('.close').addEventListener('click', closeModal);
-    window.addEventListener('click', (e) => {
-        const modal = document.getElementById('alertModal');
-        if (e.target === modal) {
-            closeModal();
-        }
-    });
-}
 
-// Auto-refresh functionality
-function startAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-    }
-    
-    autoRefreshInterval = setInterval(async () => {
-        if (document.getElementById('autoRefresh').checked) {
-            await loadMetrics();
-            await loadWorkflows();
-        }
-    }, 5000);
-}
+    // Alert Triage Agent controls (second page markup)
+    const fileInput = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const logEl = document.getElementById('log');
+    const finalStatusEl = document.getElementById('finalStatus');
 
-function toggleAutoRefresh() {
-    const checkbox = document.getElementById('autoRefresh');
-    const status = document.getElementById('autoRefreshStatus');
-    
-    if (checkbox.checked) {
-        status.textContent = 'ON (5s)';
-        status.style.color = 'var(--success-color)';
-        startAutoRefresh();
-    } else {
-        status.textContent = 'OFF';
-        status.style.color = 'var(--text-secondary)';
-        clearInterval(autoRefreshInterval);
-    }
-}
+    if (fileInput && processBtn) {
+        fileInput.addEventListener('change', () => {
+            processBtn.disabled = !(fileInput.files && fileInput.files.length > 0);
+        });
 
-// Load system metrics
-async function loadMetrics() {
-    try {
-        const response = await fetch(`${API_BASE}/api/metrics`);
-        const data = await response.json();
-        
-        document.getElementById('totalProcessed').textContent = data.total_alerts_processed || 0;
-        document.getElementById('inProgress').textContent = data.alerts_in_progress || 0;
-        document.getElementById('truePositives').textContent = data.true_positives || 0;
-        document.getElementById('falsePositives').textContent = data.false_positives || 0;
-        document.getElementById('benign').textContent = data.benign || 0;
-        document.getElementById('avgMTTR').textContent = formatDuration(data.average_mttr || 0);
-    } catch (error) {
-        console.error('Error loading metrics:', error);
-    }
-}
+        processBtn.addEventListener('click', async () => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast('Please select a JSON file to upload', 'warning');
+                return;
+            }
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            processBtn.disabled = true;
+            finalStatusEl && (finalStatusEl.textContent = '');
+            logEl && (logEl.textContent = '');
+            appendLog(logEl, 'Submitting alert to backend...');
+            try {
+                const resp = await fetch(`${API_BASE}/api/upload-alert`, { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    appendLog(logEl, `Upload failed (${resp.status}): ${text}`);
+                    showToast(`Upload failed (${resp.status})`, 'error');
+                    processBtn.disabled = false;
+                    return;
+                }
+                const data = await resp.json();
+                showToast('Alert uploaded. Starting live updates...', 'success');
+                appendLog(logEl, `Uploaded ${data.workflows?.length || 1} alert(s).`);
 
-// Load workflows
-async function loadWorkflows() {
-    try {
-        const statusFilter = document.getElementById('statusFilter').value;
-        const priorityFilter = document.getElementById('priorityFilter').value;
-        
-        let url = `${API_BASE}/api/alerts/list?limit=100`;
-        if (statusFilter) url += `&status=${statusFilter}`;
-        if (priorityFilter) url += `&priority=${priorityFilter}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        workflows = data.workflows || [];
-        // Ensure websockets connected for active workflows
-        workflows.forEach(wf => {
-            if (wf.status !== 'COMPLETED' && wf.status !== 'FAILED' && wf.workflow_id) {
-                connectWorkflowWebSocket(wf.workflow_id);
+                // Open WebSocket(s) for live stream
+                const items = Array.isArray(data.workflows) ? data.workflows : [];
+                items.forEach(({ workflow_id }) => {
+                    if (!workflow_id) return;
+                    openWorkflowStream(workflow_id, logEl, finalStatusEl);
+                });
+            } catch (e) {
+                console.error('Upload error:', e);
+                appendLog(logEl, 'Upload error');
+                showToast('Upload error', 'error');
+                processBtn.disabled = false;
             }
         });
-        renderWorkflowsTable(workflows);
-    } catch (error) {
-        console.error('Error loading workflows:', error);
-        showToast('Error loading workflows', 'error');
     }
-}
 
-// Connect to WebSocket for a workflow and handle live updates
-function connectWorkflowWebSocket(workflowId) {
-    if (!workflowId || wsConnections[workflowId]) return; // already connected
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${window.location.host}/ws/${workflowId}`;
-    try {
-        const ws = new WebSocket(wsUrl);
-        ws.onopen = () => {
-            wsConnections[workflowId] = ws;
-            // Optionally send a ping
-            try { ws.send('ping'); } catch {}
-        };
-        ws.onmessage = (evt) => {
-            let msg = null;
-            try { msg = JSON.parse(evt.data); } catch { return; }
-            if (msg.type === 'progress') {
-                // Show agent stage transitions
-                showToast(`Workflow ${workflowId}: ${msg.stage} ${msg.status}`, 'info');
-            }
-            if (msg.type === 'final') {
-                showToast(`Workflow ${workflowId} completed: ${msg.status}`, 'success');
-                // Refresh to show final status and LLM results
-                loadMetrics();
-                loadWorkflows();
-                // Close ws
-                try { ws.close(); } catch {}
-                delete wsConnections[workflowId];
-            }
-        };
-        ws.onerror = () => {
-            // Ignore errors, will rely on polling
-        };
-        ws.onclose = () => {
-            delete wsConnections[workflowId];
-        };
-    } catch (e) {
-        console.warn('WS connect failed', e);
+    if (resetBtn && fileInput && processBtn) {
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            processBtn.disabled = true;
+            if (logEl) logEl.textContent = '';
+            if (finalStatusEl) finalStatusEl.textContent = '';
+        });
     }
-}
-
-// Render workflows table
-function renderWorkflowsTable(workflowsList) {
-    const tbody = document.getElementById('alertsTableBody');
-    
-    if (workflowsList.length === 0) {
-        tbody.innerHTML = `
-            <tr class="empty-state">
-                <td colspan="8">
-                    <div class="empty-message">
-                        <p>No alerts found</p>
-                        <p class="empty-hint">Try adjusting filters or load sample alerts</p>
-                    </div>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = workflowsList.map(workflow => `
-        <tr>
-            <td><code>${truncate(workflow.alert_id, 30)}</code></td>
-            <td>${truncate(workflow.alert_id.split('-')[1] || 'N/A', 20)}</td>
-            <td><span class="status-badge status-${workflow.status}">${workflow.status}</span></td>
-            <td>${workflow.current_agent || 'N/A'}</td>
-            <td>${workflow.verdict ? `<span class="verdict-badge verdict-${workflow.verdict}">${formatVerdict(workflow.verdict)}</span>` : '-'}</td>
-            <td>${workflow.priority ? `<span class="priority-badge priority-${workflow.priority}">${workflow.priority}</span>` : '-'}</td>
-            <td>${workflow.processing_time_seconds ? formatDuration(workflow.processing_time_seconds) : 'In progress...'}</td>
-            <td>
-                <button class="action-btn" onclick="viewAlertDetails('${workflow.workflow_id}')">
-                    View Details
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// View alert details
-async function viewAlertDetails(workflowId) {
-    try {
-        const response = await fetch(`${API_BASE}/api/alerts/status/${workflowId}?include_details=true`);
-        const data = await response.json();
-        
-        renderAlertDetails(data);
-        document.getElementById('alertModal').style.display = 'block';
-    } catch (error) {
-        console.error('Error loading alert details:', error);
-        showToast('Error loading alert details', 'error');
-    }
-}
-
-// Render alert details in modal
-function renderAlertDetails(data) {
-    const workflow = data.workflow;
-    const details = data.details;
-    
-    let html = `
-        <div class="detail-section">
-            <h3>Alert Information</h3>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <div class="detail-label">Alert ID</div>
-                    <div class="detail-value"><code>${workflow.alert_id}</code></div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Workflow ID</div>
-                    <div class="detail-value"><code>${workflow.workflow_id}</code></div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Status</div>
-                    <div class="detail-value">
-                        <span class="status-badge status-${workflow.status}">${workflow.status}</span>
-                    </div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Processing Time</div>
-                    <div class="detail-value">${workflow.processing_time_seconds ? formatDuration(workflow.processing_time_seconds) : 'In progress'}</div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    if (details && details.alert) {
-        html += `
-            <div class="detail-section">
-                <h3>Alert Details</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <div class="detail-label">Rule</div>
-                        <div class="detail-value">${details.alert.rule_name || details.alert.rule_id}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Severity</div>
-                        <div class="detail-value">${details.alert.severity}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Host</div>
-                        <div class="detail-value">${details.alert.assets?.host || 'N/A'}</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Source IP</div>
-                        <div class="detail-value">${details.alert.assets?.source_ip || 'N/A'}</div>
-                    </div>
-                </div>
-                <div class="detail-item" style="margin-top: 1rem;">
-                    <div class="detail-label">Description</div>
-                    <div class="detail-value">${details.alert.description}</div>
-                </div>
-            </div>
-        `;
-    }
-    
-    if (details && details.triage) {
-        html += `
-            <div class="detail-section">
-                <h3>🔍 Triage Assessment</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <div class="detail-label">Verdict</div>
-                        <div class="detail-value">
-                            <span class="verdict-badge verdict-${details.triage.verdict}">
-                                ${formatVerdict(details.triage.verdict)}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Confidence</div>
-                        <div class="detail-value">${(details.triage.confidence * 100).toFixed(0)}%</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Noise Score</div>
-                        <div class="detail-value">${(details.triage.noise_score * 100).toFixed(0)}%</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Investigation Required</div>
-                        <div class="detail-value">${details.triage.requires_investigation ? '✓ Yes' : '✗ No'}</div>
-                    </div>
-                </div>
-                <div class="detail-item" style="margin-top: 1rem;">
-                    <div class="detail-label">Reasoning</div>
-                    <div class="detail-value">${details.triage.reasoning}</div>
-                </div>
-                ${details.triage.key_indicators && details.triage.key_indicators.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Key Indicators</div>
-                        <ul class="detail-list">
-                            ${details.triage.key_indicators.map(ind => `<li>${ind}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    if (details && details.investigation) {
-        html += `
-            <div class="detail-section">
-                <h3>🔬 Investigation Results</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <div class="detail-label">Risk Score</div>
-                        <div class="detail-value">${details.investigation.risk_score.toFixed(1)}/10</div>
-                    </div>
-                </div>
-                ${details.investigation.findings && details.investigation.findings.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Findings</div>
-                        <ul class="detail-list">
-                            ${details.investigation.findings.map(finding => `<li>${finding}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                ${details.investigation.attack_chain && details.investigation.attack_chain.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Attack Chain</div>
-                        <div class="detail-value">${details.investigation.attack_chain.join(' → ')}</div>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    if (details && details.decision) {
-        html += `
-            <div class="detail-section">
-                <h3>⚖️ Final Decision</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <div class="detail-label">Verdict</div>
-                        <div class="detail-value">
-                            <span class="verdict-badge verdict-${details.decision.final_verdict}">
-                                ${formatVerdict(details.decision.final_verdict)}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Priority</div>
-                        <div class="detail-value">
-                            <span class="priority-badge priority-${details.decision.priority}">
-                                ${details.decision.priority}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Confidence</div>
-                        <div class="detail-value">${(details.decision.confidence * 100).toFixed(0)}%</div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="detail-label">Escalation Required</div>
-                        <div class="detail-value">${details.decision.escalation_required ? '✓ Yes' : '✗ No'}</div>
-                    </div>
-                </div>
-                <div class="detail-item" style="margin-top: 1rem;">
-                    <div class="detail-label">Rationale</div>
-                    <div class="detail-value">${details.decision.rationale}</div>
-                </div>
-                <div class="detail-item" style="margin-top: 1rem;">
-                    <div class="detail-label">Estimated Impact</div>
-                    <div class="detail-value">${details.decision.estimated_impact}</div>
-                </div>
-                ${details.decision.recommended_actions && details.decision.recommended_actions.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Recommended Actions</div>
-                        <ul class="detail-list">
-                            ${details.decision.recommended_actions.map(action => `<li>${action}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    if (details && details.response) {
-        html += `
-            <div class="detail-section">
-                <h3>🚨 Response Actions</h3>
-                ${details.response.ticket_id ? `
-                    <div class="detail-item">
-                        <div class="detail-label">Ticket ID</div>
-                        <div class="detail-value"><code>${details.response.ticket_id}</code></div>
-                    </div>
-                ` : ''}
-                <div class="detail-item" style="margin-top: 1rem;">
-                    <div class="detail-label">Summary</div>
-                    <div class="detail-value">${details.response.summary}</div>
-                </div>
-                ${details.response.actions_taken && details.response.actions_taken.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Actions Taken</div>
-                        <ul class="detail-list">
-                            ${details.response.actions_taken.map(action => `<li>${action}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                ${details.response.notifications_sent && details.response.notifications_sent.length > 0 ? `
-                    <div class="detail-item" style="margin-top: 1rem;">
-                        <div class="detail-label">Notifications Sent</div>
-                        <ul class="detail-list">
-                            ${details.response.notifications_sent.map(notif => `<li>${notif}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    document.getElementById('alertDetailContent').innerHTML = html;
 }
 
 // Load sample alerts
@@ -550,3 +221,80 @@ function truncate(str, maxLength) {
     if (!str) return 'N/A';
     return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
 }
+
+// Missing helpers: implement minimal versions
+async function loadMetrics() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/metrics`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const el = document.getElementById('metricsContent');
+        if (el) el.textContent = JSON.stringify(data);
+    } catch {}
+}
+
+async function loadWorkflows() {
+    try {
+        // Correct endpoint per backend: /api/alerts/list
+        const resp = await fetch(`${API_BASE}/api/alerts/list`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        workflows = Array.isArray(data.workflows) ? data.workflows : [];
+        const el = document.getElementById('workflowsContent');
+        if (el) el.textContent = `${workflows.length} workflows`;
+    } catch {}
+}
+
+function startAutoRefresh() {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+    autoRefreshInterval = setInterval(() => {
+        loadMetrics();
+        loadWorkflows();
+    }, 5000);
+}
+
+// Helper: append log line in Live Agent view
+function appendLog(logEl, text) {
+    if (!logEl) return;
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.textContent = text;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Open WS and stream status updates
+function openWorkflowStream(workflowId, logEl, finalStatusEl) {
+    try {
+        const wsUrl = `${API_BASE.replace('http', 'ws')}/ws/${workflowId}`;
+        const ws = new WebSocket(wsUrl);
+        wsConnections[workflowId] = ws;
+        appendLog(logEl, `Connected to workflow ${workflowId}`);
+        ws.onmessage = (evt) => {
+            try {
+                const msg = JSON.parse(evt.data);
+                if (msg.type === 'status') {
+                    appendLog(logEl, `Status: ${msg.status} | Agent: ${msg.current_agent || 'n/a'}`);
+                } else if (msg.type === 'progress') {
+                    appendLog(logEl, `Progress: ${JSON.stringify(msg)}`);
+                } else if (msg.type === 'final') {
+                    appendLog(logEl, `Final: ${JSON.stringify(msg)}`);
+                    if (finalStatusEl) {
+                        const verdict = msg.verdict || 'unknown';
+                        const priority = msg.priority || 'n/a';
+                        finalStatusEl.textContent = `Status: ${msg.status} | Verdict: ${verdict} | Priority: ${priority}`;
+                    }
+                }
+            } catch (_) {
+                appendLog(logEl, evt.data);
+            }
+        };
+        ws.onerror = () => appendLog(logEl, 'WebSocket error');
+        ws.onclose = () => appendLog(logEl, 'WebSocket closed');
+    } catch (e) {
+        appendLog(logEl, `WS error: ${e.message}`);
+    }
+}
+
+// Close IIFE
+})();

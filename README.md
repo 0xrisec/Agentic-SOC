@@ -257,23 +257,73 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and add your OpenAI API key:
+**Option 1: Quick Start with Mock LLM (No API Key Required)**
+
+The application works out of the box with mock data! Simply keep the default configuration:
 
 ```env
+LLM_PROVIDER=mock
+```
+
+This is perfect for:
+- Testing the application without API keys
+- Development and debugging
+- Demonstrations and POCs
+- Understanding the agent workflow
+
+**Option 2: Use Real LLM (OpenAI or Gemini)**
+
+Edit `.env` and configure your preferred LLM provider:
+
+For OpenAI:
+```env
+LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-actual-api-key-here
 OPENAI_MODEL=gpt-4-turbo-preview
+```
+
+For Google Gemini:
+```env
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL=gemini-pro
 ```
 
 ---
 
 ## ⚙️ Configuration
 
+### LLM Provider Options
+
+The system supports three LLM providers:
+
+1. **Mock Provider** (Default - No API Key Required)
+   - Returns realistic mock data for testing
+   - Simulates all agent responses intelligently
+   - Perfect for development and demos
+   - Zero cost, instant setup
+
+2. **OpenAI Provider**
+   - Uses GPT models for production quality responses
+   - Requires OpenAI API key
+   - Best for production deployments
+
+3. **Gemini Provider**
+   - Uses Google Gemini models
+   - Requires Google API key
+   - Alternative to OpenAI
+
+The application automatically falls back to mock provider if API keys are missing.
+
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key (required) | - |
+| `LLM_PROVIDER` | LLM provider: mock, openai, or gemini | mock |
+| `OPENAI_API_KEY` | OpenAI API key (optional) | - |
 | `OPENAI_MODEL` | GPT model to use | gpt-4-turbo-preview |
+| `GEMINI_API_KEY` | Google Gemini API key (optional) | - |
+| `GEMINI_MODEL` | Gemini model to use | gemini-pro |
 | `API_HOST` | API server host | 0.0.0.0 |
 | `API_PORT` | API server port | 8000 |
 | `LOG_LEVEL` | Logging level | INFO |

@@ -571,3 +571,44 @@ body {
         padding: 0.75rem 0.5rem;
     }
 }
+
+/* Full-screen Agent UI */
+body.agent-body { background: var(--dark-bg); }
+.agent-root { display: flex; flex-direction: column; height: 100vh; }
+.agent-topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); background: linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.9)); }
+.brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success-color); box-shadow: 0 0 10px var(--success-color); }
+.brand .title { color: var(--text-primary); }
+.controls { display: flex; align-items: center; gap: 0.5rem; }
+.file-upload { position: relative; overflow: hidden; display: inline-flex; align-items: center; padding: 0.5rem 0.75rem; border: 1px dashed var(--border-color); border-radius: 0.5rem; color: var(--text-secondary); cursor: pointer; }
+.file-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+#processBtn { padding: 0.5rem 0.9rem; border-radius: 0.5rem; border: none; background: var(--primary-color); color: white; font-weight: 600; }
+#processBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.agent-layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; flex: 1; }
+.agent-sidebar { border-right: 1px solid var(--border-color); padding: 1rem; overflow-y: auto; background: #0b1224; }
+.section-title { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
+.steps { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.step { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; border-radius: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid transparent; }
+.step .bullet { width: 10px; height: 10px; border-radius: 50%; background: var(--border-color); }
+.step .text .name { font-weight: 600; }
+.step .text .desc { font-size: 0.8rem; color: var(--text-secondary); }
+.step.pending { border-color: var(--border-color); }
+.step.running { border-color: var(--info-color); background: rgba(6, 182, 212, 0.12); }
+.step.running .bullet { background: var(--info-color); box-shadow: 0 0 10px var(--info-color); animation: pulse 1s infinite; }
+.step.done { border-color: var(--success-color); background: rgba(16, 185, 129, 0.12); }
+.step.done .bullet { background: var(--success-color); }
+.step.error { border-color: var(--danger-color); background: rgba(239, 68, 68, 0.12); }
+.step.error .bullet { background: var(--danger-color); }
+@keyframes pulse { 0%{ transform: scale(1);} 50%{ transform: scale(1.2);} 100%{ transform: scale(1);} }
+.meta .meta-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.meta-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+.meta-item span { color: var(--text-secondary); font-size: 0.85rem; }
+.meta-item code { color: var(--text-primary); }
+.agent-stream { display: flex; flex-direction: column; height: 100%; }
+.stream-log { flex: 1; padding: 1rem; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: radial-gradient(1200px 600px at top left, rgba(37,99,235,0.06), transparent), #0b1224; }
+.log-line { padding: 0.25rem 0; color: #cbd5e1; }
+.stream-footer { border-top: 1px solid var(--border-color); padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+.stream-footer .status { font-weight: 700; }
+.ghost { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 0.75rem; border-radius: 0.5rem; cursor: pointer; }
+.ghost:hover { color: var(--text-primary); }
+.agent-root.running #processBtn { filter: grayscale(0.2); }

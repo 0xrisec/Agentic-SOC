@@ -165,4 +165,82 @@
 
     <script src="/static/dashboard.js"></script>
 </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic SOC – Live Agent</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="agent-body">
+    <div class="agent-root">
+        <div class="agent-topbar">
+            <div class="brand">
+                <span class="dot"></span>
+                <span class="title">Alert Triage Agent</span>
+            </div>
+            <div class="controls">
+                <label class="file-upload">
+                    <input type="file" id="fileInput" accept="application/json" />
+                    <span>Select JSON</span>
+                </label>
+                <button id="processBtn" disabled>Run Agent</button>
+            </div>
+        </div>
+
+        <div class="agent-layout">
+            <aside class="agent-sidebar">
+                <div class="sidebar-section">
+                    <div class="section-title">Workflow</div>
+                    <ol id="steps" class="steps">
+                        <li data-step="triage" class="step">
+                            <div class="bullet"></div>
+                            <div class="text">
+                                <div class="name">Triage</div>
+                                <div class="desc">Noise filtering & enrichment</div>
+                            </div>
+                        </li>
+                        <li data-step="investigation" class="step">
+                            <div class="bullet"></div>
+                            <div class="text">
+                                <div class="name">Investigation</div>
+                                <div class="desc">Evidence gathering</div>
+                            </div>
+                        </li>
+                        <li data-step="decision" class="step">
+                            <div class="bullet"></div>
+                            <div class="text">
+                                <div class="name">Decision</div>
+                                <div class="desc">Verdict & priority</div>
+                            </div>
+                        </li>
+                        <li data-step="response" class="step">
+                            <div class="bullet"></div>
+                            <div class="text">
+                                <div class="name">Response</div>
+                                <div class="desc">Actions & ticketing</div>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="sidebar-section meta">
+                    <div class="section-title">Submission</div>
+                    <div id="submissionMeta" class="meta-list"></div>
+                </div>
+            </aside>
+
+            <main class="agent-stream">
+                <div id="log" class="stream-log" aria-live="polite"></div>
+                <div class="stream-footer">
+                    <div class="status" id="finalStatus"></div>
+                    <button id="resetBtn" class="ghost">Reset</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/dashboard.js"></script>
+</body>
 </html>

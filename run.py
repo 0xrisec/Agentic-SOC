@@ -14,27 +14,52 @@ sys.path.insert(0, str(project_root))
 
 def check_environment():
     """Check if environment is properly configured"""
-    env_file = project_root / ".env"
-    
-    if not env_file.exists():
-        print("❌ Error: .env file not found!")
-        print("   Please copy .env.example to .env and configure your OpenAI API key.")
-        print()
-        print("   cp .env.example .env")
-        print("   # Then edit .env and add your OPENAI_API_KEY")
-        return False
-    
-    # Check if API key is set
     from dotenv import load_dotenv
     load_dotenv()
     
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        print("❌ Error: OPENAI_API_KEY not configured!")
-        print("   Please edit .env and set your actual OpenAI API key.")
-        return False
+    # Get LLM provider setting
+    llm_provider = os.getenv("LLM_PROVIDER", "mock-data").lower()
     
-    print("✅ Environment configured correctly")
+    # If using mock provider, no API key is needed
+    if llm_provider in ("mock", "mock-data", "none", "disabled"):
+        print("✅ Using Mock LLM provider (no API key required)")
+        print(f"   Provider: {llm_provider}")
+        return True
+    
+    # For other providers, check if .env file exists
+    env_file = project_root / ".env"
+    if not env_file.exists():
+        print("⚠️  Warning: .env file not found!")
+        print("   Using default mock provider for testing.")
+        print()
+        print("   To use OpenAI or Gemini:")
+        print("   1. cp .env.example .env")
+        print("   2. Edit .env and configure your API key")
+        return True
+    
+    # Check provider-specific API keys
+    if llm_provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            print("⚠️  Warning: OPENAI_API_KEY not configured!")
+            print("   Falling back to Mock LLM provider.")
+            return True
+        print("✅ Using OpenAI provider")
+        print(f"   Model: {os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')}")
+    
+    elif llm_provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key or api_key == "your_gemini_api_key_here":
+            print("⚠️  Warning: GEMINI_API_KEY not configured!")
+            print("   Falling back to Mock LLM provider.")
+            return True
+        print("✅ Using Gemini provider")
+        print(f"   Model: {os.getenv('GEMINI_MODEL', 'gemini-pro')}")
+    
+    else:
+        print(f"⚠️  Warning: Unknown provider '{llm_provider}'")
+        print("   Falling back to Mock LLM provider.")
+    
     return True
 
 
