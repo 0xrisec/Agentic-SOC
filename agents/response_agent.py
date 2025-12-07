@@ -240,16 +240,22 @@ class ResponseAgent:
         except Exception as e:
             # Fallback to mock data
             mock_data = {
-                "response_action": "Block IP",
-                "confidence": 0.9,
-                "reasoning": "Detected malicious activity from IP 192.168.1.1",
+                "actions_taken": ["Block IP 192.168.1.1", "Create incident ticket"],
+                "ticket_id": self._generate_ticket_id(),
+                "notifications_sent": ["SOC Team notified", "Incident response team alerted"],
+                "automation_applied": ["Firewall rule created", "Account monitoring enabled"],
+                "status": "COMPLETED",
+                "summary": "Alert processed successfully with automated response actions",
                 "timestamp": datetime.utcnow().isoformat()
             }
 
             response_result = ResponseResult(
-                response_action=mock_data["response_action"],
-                confidence=mock_data["confidence"],
-                reasoning=mock_data["reasoning"],
+                actions_taken=mock_data["actions_taken"],
+                ticket_id=mock_data["ticket_id"],
+                notifications_sent=mock_data["notifications_sent"],
+                automation_applied=mock_data["automation_applied"],
+                status=mock_data["status"],
+                summary=mock_data["summary"],
                 timestamp=mock_data["timestamp"]
             )
 

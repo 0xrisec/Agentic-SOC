@@ -126,16 +126,24 @@ class DecisionAgent:
         except Exception as e:
             # Fallback to mock data
             mock_data = {
-                "decision": "Escalate",
+                "final_verdict": "true_positive",
+                "priority": "P1",
                 "confidence": 0.85,
-                "reasoning": "High severity alert with multiple indicators of compromise.",
+                "rationale": "High severity alert with multiple indicators of compromise.",
+                "recommended_actions": ["Isolate affected systems", "Reset credentials", "Monitor for further activity"],
+                "escalation_required": True,
+                "estimated_impact": "High - Potential data breach",
                 "timestamp": datetime.utcnow().isoformat()
             }
 
             decision_result = DecisionResult(
-                decision=mock_data["decision"],
+                final_verdict=Verdict(mock_data["final_verdict"]),
+                priority=Priority(mock_data["priority"]),
                 confidence=mock_data["confidence"],
-                reasoning=mock_data["reasoning"],
+                rationale=mock_data["rationale"],
+                recommended_actions=mock_data["recommended_actions"],
+                escalation_required=mock_data["escalation_required"],
+                estimated_impact=mock_data["estimated_impact"],
                 timestamp=mock_data["timestamp"]
             )
 
