@@ -573,17 +573,34 @@ function connectWorkflowWebSocket(workflowId, alertData) {
     if (!workflowId || wsConnections[workflowId]) return; // already connected
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}/ws/${workflowId}`;
+    const shortId = workflowId.substring(0, 8);
+    
+    console.log(`[WS:${shortId}] Connecting to WebSocket: ${wsUrl}`);
+    
     try {
         const ws = new WebSocket(wsUrl);
         ws.onopen = () => {
+            console.log(`[WS:${shortId}] WebSocket connection opened successfully`);
             wsConnections[workflowId] = ws;
             // Optionally send a ping
-            try { ws.send('ping'); } catch {}
+            try { 
+                ws.send('ping');
+                console.log(`[WS:${shortId}] Sent initial ping`);
+            } catch (pingError) {
+                console.warn(`[WS:${shortId}] Failed to send initial ping:`, pingError);
+            }
         };
         // Handle WebSocket messages and update workflow session
         ws.onmessage = (evt) => {
+            console.log(`[WS:${shortId}] Received message:`, evt.data);
             let msg = null;
-            try { msg = JSON.parse(evt.data); } catch { return; }
+            try { 
+                msg = JSON.parse(evt.data);
+                console.log(`[WS:${shortId}] Parsed message:`, msg);
+            } catch (parseError) {
+                console.warn(`[WS:${shortId}] Failed to parse message as JSON:`, parseError);
+                return;
+            }
 
             // Update agent status based on message type
             if (msg.stage) {
@@ -591,19 +608,25 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                 let status = 'In Progress';
                 let logMessage = null;
 
+                console.log(`[WS:${shortId}] Processing agent stage: ${msg.stage}, type: ${msg.type}`);
+
                 if (msg.type === 'progress' || msg.status) {
                     if (msg.status && msg.status.toLowerCase().includes('completed')) {
                         status = 'Completed';
+                        console.log(`[WS:${shortId}] Agent ${agentName} completed`);
                     } else if (msg.status && msg.status.toLowerCase().includes('failed')) {
                         status = 'Failed';
+                        console.log(`[WS:${shortId}] Agent ${agentName} failed`);
                     } else if (msg.status && msg.status.toLowerCase().includes('start')) {
                         status = 'In Progress';
+                        console.log(`[WS:${shortId}] Agent ${agentName} started`);
                     }
                     logMessage = msg.status || msg.message;
                 }
 
                 if (msg.type === 'agent_output' && msg.details) {
                     logMessage = msg.details;
+                    console.log(`[WS:${shortId}] Agent ${agentName} output: ${logMessage}`);
                 }
 
                 updateAgentStatus(workflowId, agentName, status, logMessage);
@@ -611,6 +634,7 @@ function connectWorkflowWebSocket(workflowId, alertData) {
 
             // Handle final verdict/decision
             if (msg.type === 'final' || (msg.stage === 'decision' && msg.verdict)) {
+                console.log(`[WS:${shortId}] Processing final verdict:`, msg.verdict || msg.final_verdict);
                 const verdictData = {
                     verdict: msg.verdict || msg.final_verdict || 'Unknown',
                     confidence: msg.confidence || msg.confidence_score,
@@ -622,6 +646,7 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                 updateWorkflowVerdict(workflowId, verdictData);
                 
                 // Refresh metrics and close connection
+                console.log(`[WS:${shortId}] Workflow completed, closing WebSocket connection`);
                 loadMetrics();
                 try { ws.close(); } catch {}
                 delete wsConnections[workflowId];
@@ -629,6 +654,7 @@ function connectWorkflowWebSocket(workflowId, alertData) {
 
             // Handle errors
             if (msg.type === 'error') {
+                console.error(`[WS:${shortId}] Error message received:`, msg.message || 'Unknown error');
                 const agentName = msg.stage ? msg.stage.toLowerCase() : null;
                 if (agentName) {
                     updateAgentStatus(workflowId, agentName, 'Failed', `Error: ${msg.message || 'Unknown error'}`);
@@ -636,13 +662,14 @@ function connectWorkflowWebSocket(workflowId, alertData) {
             }
         };
         ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+            console.error(`[WS:${shortId}] WebSocket error occurred:`, error);
         };
-        ws.onclose = () => {
+        ws.onclose = (event) => {
+            console.log(`[WS:${shortId}] WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
             delete wsConnections[workflowId];
         };
     } catch (e) {
-        console.warn('WS connect failed', e);
+        console.error(`[WS:${shortId}] Failed to create WebSocket connection:`, e);
     }
 }
 
@@ -898,6 +925,8 @@ async function clearAllWorkflows() {
     
     try {
         showLoading(true);
+        const activeConnections = Object.keys(wsConnections).length;
+        console.log(`[WS] Clearing all workflows. Active WebSocket connections: ${activeConnections}`);
         addTerminalLog('system', 'Clearing all data...');
         
         await fetch(`${API_BASE}/api/workflows/clear`, { method: 'DELETE' });
