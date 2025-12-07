@@ -8,6 +8,7 @@ let selectedAlerts = new Set();
 let selectedFileId = null;
 // Track active WebSocket connections globally
 const wsConnections = {};
+let autoScrollTerminal = true;
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,6 +69,15 @@ function setupEventListeners() {
             closeModal();
         }
     });
+
+    // Terminal auto-scroll
+    const terminalOutput = document.getElementById('terminalOutput');
+    if (terminalOutput) {
+        terminalOutput.addEventListener('scroll', () => {
+            const isAtBottom = terminalOutput.scrollTop + terminalOutput.clientHeight >= terminalOutput.scrollHeight - 1;
+            autoScrollTerminal = isAtBottom;
+        });
+    }
 }
 
 // Handle file upload (auto-submit)
@@ -315,6 +325,14 @@ function clearTerminal() {
     Object.keys(workflowData).forEach(key => delete workflowData[key]);
 }
 
+// Helper function to scroll terminal to bottom if auto-scroll is enabled
+function scrollTerminalToBottom() {
+    if (autoScrollTerminal) {
+        const terminalOutput = document.getElementById('terminalOutput');
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    }
+}
+
 // Add general log message (not workflow-specific)
 function addTerminalLog(stage, message, status = null) {
     const terminalOutput = document.getElementById('terminalOutput');
@@ -331,7 +349,7 @@ function addTerminalLog(stage, message, status = null) {
         logLine.className = 'terminal-line system';
         logLine.innerHTML = `<span class="message">${message}</span>`;
         terminalOutput.appendChild(logLine);
-        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        scrollTerminalToBottom();
         return;
     }
 }
@@ -376,8 +394,8 @@ function updateWorkflowSession(workflowId, alertData) {
     // Render the workflow session
     renderWorkflowSession(session, workflowId);
     
-    // Scroll to bottom
-    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    // Scroll to bottom if auto-scroll enabled
+    scrollTerminalToBottom();
 }
 
 // Render workflow session HTML
@@ -481,6 +499,10 @@ function renderWorkflowSession(sessionElement, workflowId) {
         html += `</div>`;
     }
 
+    if (!data.allAgentsCompleted) {
+        html += `<div class="workflow-section"><div class="generating-indicator">Generating</div></div>`;
+    }
+
     html += `
         </div>
         <div class="workflow-divider">
@@ -540,6 +562,7 @@ function updateAgentStatus(workflowId, agentName, status, logMessage = null) {
     const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
     if (session) {
         renderWorkflowSession(session, workflowId);
+        scrollTerminalToBottom();
     }
 }
 
@@ -573,6 +596,7 @@ function updateWorkflowVerdict(workflowId, verdictData) {
     const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
     if (session) {
         renderWorkflowSession(session, workflowId);
+        scrollTerminalToBottom();
     }
 }
 
@@ -630,6 +654,7 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                     const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
                     if (session) {
                         renderWorkflowSession(session, workflowId);
+                        scrollTerminalToBottom();
                     }
                 }
             }
