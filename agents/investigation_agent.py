@@ -112,11 +112,34 @@ class InvestigationAgent:
             if event_callback:
                 event_callback(state.workflow_id, {"type": "progress", "stage": "investigate", "status": "processing"})
 
-            try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
-            except asyncio.TimeoutError:
-                 raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
+            if not state.enable_ai:
+                # Use mock data instead of LLM call
+                mock_data = {
+                    "findings": ["Potential credential access attempt detected"],
+                    "threat_context": {"threat_type": "Credential Access", "confidence": 0.85},
+                    "related_alerts": ["Alert1", "Alert2"],
+                    "attack_chain": ["Reconnaissance", "Credential Access"],
+                    "risk_score": 8.5,
+                    "evidence": {"details": ["IP address 192.168.1.1", "Failed login attempts"]},
+                    "timestamp": datetime.utcnow().isoformat()
+                }
 
+                investigation_result = InvestigationResult(
+                    findings=mock_data["findings"],
+                    threat_context=mock_data["threat_context"],
+                    related_alerts=mock_data["related_alerts"],
+                    attack_chain=mock_data["attack_chain"],
+                    risk_score=mock_data["risk_score"],
+                    evidence=mock_data["evidence"],
+                    timestamp=mock_data["timestamp"]
+                )
+                state.investigation_result = investigation_result
+                state.status = AlertStatus.COMPLETED
+                await asyncio.sleep(settings.mock_data_delay)
+                return state
+            else:
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
+            
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")
 
@@ -141,33 +164,6 @@ class InvestigationAgent:
             return state
             
         except Exception as e:
-            if settings.use_mock_data_on_error:
-                # Fallback to mock data
-                mock_data = {
-                    "findings": ["Potential credential access attempt detected"],
-                    "threat_context": {"threat_type": "Credential Access", "confidence": 0.85},
-                    "related_alerts": ["Alert1", "Alert2"],
-                    "attack_chain": ["Reconnaissance", "Credential Access"],
-                    "risk_score": 8.5,
-                    "evidence": {"details": ["IP address 192.168.1.1", "Failed login attempts"]},
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-
-                investigation_result = InvestigationResult(
-                    findings=mock_data["findings"],
-                    threat_context=mock_data["threat_context"],
-                    related_alerts=mock_data["related_alerts"],
-                    attack_chain=mock_data["attack_chain"],
-                    risk_score=mock_data["risk_score"],
-                    evidence=mock_data["evidence"],
-                    timestamp=mock_data["timestamp"]
-                )
-
-                state.investigation_result = investigation_result
-                state.errors.append(f"Investigation agent error: {str(e)}")
-                state.status = AlertStatus.COMPLETED
-                return state
-            else:
                 raise e
     
     def _parse_response(self, content: str) -> Dict[str, Any]:

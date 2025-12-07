@@ -129,6 +129,9 @@ class SOCWorkflowState(BaseModel):
     status: AlertStatus = AlertStatus.NEW
     current_agent: Optional[str] = None
     
+    # AI Configuration
+    enable_ai: bool = True
+    
     # Agent Results
     triage_result: Optional[TriageResult] = None
     investigation_result: Optional[InvestigationResult] = None

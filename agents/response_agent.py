@@ -190,11 +190,36 @@ class ResponseAgent:
             chain = self.prompt_template | self.llm
             if event_callback:
                 event_callback(state.workflow_id, {"type": "progress", "stage": "respond", "status": "processing"})
-            try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
-            except asyncio.TimeoutError:
-                 raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
+            
+            if not state.enable_ai:
+                # Fallback to mock data
+                mock_data = {
+                    "actions_taken": ["Block IP 192.168.1.1", "Create incident ticket"],
+                    "ticket_id": self._generate_ticket_id(),
+                    "notifications_sent": ["SOC Team notified", "Incident response team alerted"],
+                    "automation_applied": ["Firewall rule created", "Account monitoring enabled"],
+                    "status": "COMPLETED",
+                    "summary": "Alert processed successfully with automated response actions",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
 
+                response_result = ResponseResult(
+                    actions_taken=mock_data["actions_taken"],
+                    ticket_id=mock_data["ticket_id"],
+                    notifications_sent=mock_data["notifications_sent"],
+                    automation_applied=mock_data["automation_applied"],
+                    status=mock_data["status"],
+                    summary=mock_data["summary"],
+                    timestamp=mock_data["timestamp"]
+                )
+
+                state.response_result = response_result
+                state.status = AlertStatus.COMPLETED
+                await asyncio.sleep(settings.mock_data_delay)
+                return state
+            else:
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
+            
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")
 
@@ -239,34 +264,7 @@ class ResponseAgent:
             return state
             
         except Exception as e:
-            if settings.use_mock_data_on_error:
-                # Fallback to mock data
-                mock_data = {
-                    "actions_taken": ["Block IP 192.168.1.1", "Create incident ticket"],
-                    "ticket_id": self._generate_ticket_id(),
-                    "notifications_sent": ["SOC Team notified", "Incident response team alerted"],
-                    "automation_applied": ["Firewall rule created", "Account monitoring enabled"],
-                    "status": "COMPLETED",
-                    "summary": "Alert processed successfully with automated response actions",
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-
-                response_result = ResponseResult(
-                    actions_taken=mock_data["actions_taken"],
-                    ticket_id=mock_data["ticket_id"],
-                    notifications_sent=mock_data["notifications_sent"],
-                    automation_applied=mock_data["automation_applied"],
-                    status=mock_data["status"],
-                    summary=mock_data["summary"],
-                    timestamp=mock_data["timestamp"]
-                )
-
-                state.response_result = response_result
-                state.errors.append(f"Response agent error: {str(e)}")
-                state.status = AlertStatus.COMPLETED
-                return state
-            else:
-                raise e
+            raise e
             
  
     def _parse_response(self, content: str) -> Dict[str, Any]:

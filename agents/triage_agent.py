@@ -65,36 +65,7 @@ class TriageAgent:
 
             # Create chain and invoke with timeout
             chain = self.prompt_template | self.llm
-
-            try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
-            except asyncio.TimeoutError:
-                raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
-
-            if not response or not response.content:
-                raise ValueError("LLM invocation failed or returned an empty response")
-
-            # Parse response
-            result_dict = self._parse_response(response.content)
-
-            # Create TriageResult
-            triage_result = TriageResult(
-                verdict=Verdict(result_dict["verdict"]),
-                confidence=result_dict["confidence"],
-                reasoning=result_dict["reasoning"],
-                noise_score=result_dict["noise_score"],
-                requires_investigation=result_dict["requires_investigation"],
-                key_indicators=result_dict["key_indicators"],
-                timestamp=datetime.utcnow().isoformat()
-            )
-
-            # Update state
-            state.triage_result = triage_result
-
-            return state
-
-        except Exception as e:
-            if settings.use_mock_data_on_error:
+            if not state.enable_ai:
                 # Fallback to mock data
                 mock_data = {
                     "verdict": "true_positive",
@@ -121,11 +92,35 @@ class TriageAgent:
                 )
 
                 state.triage_result = triage_result
-                state.errors.append(f"Triage agent error: {str(e)}")
                 state.status = AlertStatus.COMPLETED
+                await asyncio.sleep(settings.mock_data_delay)
                 return state
             else:
-                raise e
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
+
+            if not response or not response.content:
+                raise ValueError("LLM invocation failed or returned an empty response")
+
+            # Parse response
+            result_dict = self._parse_response(response.content)
+
+            # Create TriageResult
+            triage_result = TriageResult(
+                verdict=Verdict(result_dict["verdict"]),
+                confidence=result_dict["confidence"],
+                reasoning=result_dict["reasoning"],
+                noise_score=result_dict["noise_score"],
+                requires_investigation=result_dict["requires_investigation"],
+                key_indicators=result_dict["key_indicators"],
+                timestamp=datetime.utcnow().isoformat()
+            )
+
+            # Update state
+            state.triage_result = triage_result
+            return state
+
+        except Exception as e:
+            raise e
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
         """Parse LLM response to extract structured data"""

@@ -261,10 +261,14 @@ async function startAnalysis() {
     showLoading(true);
     
     try {
+        const enableAI = document.getElementById('enableAIToggle').checked;
         const response = await fetch(`${API_BASE}/api/alerts/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(selectedAlertsList)
+            body: JSON.stringify({
+                alerts: selectedAlertsList,
+                enable_ai: enableAI
+            })
         });
         
         const data = await response.json();

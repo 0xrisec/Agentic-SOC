@@ -116,6 +116,12 @@ orchestrator = get_orchestrator(event_callback=_event_callback)
 class ProcessAlertRequest(BaseModel):
     """Request to process a new alert"""
     alert: Alert
+    enable_ai: bool = True
+
+class ProcessBatchRequest(BaseModel):
+    """Request to process multiple alerts"""
+    alerts: List[Any]
+    enable_ai: bool = True
 
 
 class ProcessAlertResponse(BaseModel):
@@ -289,7 +295,8 @@ async def process_alert(request: ProcessAlertRequest, background_tasks: Backgrou
         # Create initial workflow state
         initial_state = SOCWorkflowState(
             alert=request.alert,
-            workflow_id=workflow_id
+            workflow_id=workflow_id,
+            enable_ai=request.enable_ai
         )
         
         # Store workflow
@@ -509,14 +516,14 @@ async def get_system_metrics():
     return system_metrics
 
 @app.post("/api/alerts/batch")
-async def process_batch(alerts: List[Any], background_tasks: BackgroundTasks):
+async def process_batch(request: ProcessBatchRequest, background_tasks: BackgroundTasks):
     """
     Process multiple alerts in batch
     
     Returns a list of workflow IDs for tracking
     """
     try:
-        alerts_payload = alerts
+        alerts_payload = request.alerts
 
         submitted = []
         for raw in alerts_payload:
@@ -524,10 +531,10 @@ async def process_batch(alerts: List[Any], background_tasks: BackgroundTasks):
                 # Create Alert pydantic model
                 alert = Alert(**_normalize_alert_payload(raw))
                 # Reuse existing process pipeline
-                req = ProcessAlertRequest(alert=alert)
+                req = ProcessAlertRequest(alert=alert, enable_ai=request.enable_ai)
                 # Generate ID and kick off processing inline (without BackgroundTasks here)
                 workflow_id = str(uuid.uuid4())
-                initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id)
+                initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id, enable_ai=request.enable_ai)
                 workflows[workflow_id] = initial_state
                 # Start processing asynchronously
                 import asyncio
