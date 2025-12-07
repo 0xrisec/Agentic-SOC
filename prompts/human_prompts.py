@@ -121,6 +121,7 @@ INVESTIGATION RESULTS:
 {investigation_summary}
 
 Provide your decision in the following JSON format:
+Values must match exactly one of the allowed options (sepearated by |):
 {{
     "final_verdict": "true_positive|false_positive|benign|suspicious",
     "priority": "P1|P2|P3|P4|P5",

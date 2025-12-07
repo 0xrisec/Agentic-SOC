@@ -113,9 +113,9 @@ class InvestigationAgent:
                 event_callback(state.workflow_id, {"type": "progress", "stage": "investigate", "status": "processing"})
 
             try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=5)  # Set a 5-second timeout
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=120)  # Set a 120-second timeout
             except asyncio.TimeoutError:
-                 raise TimeoutError("LLM invocation timed out after 5 seconds")
+                 raise TimeoutError("LLM invocation timed out after 120 seconds")
 
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")

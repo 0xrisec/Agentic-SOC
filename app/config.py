@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     response_temperature: float = 0.2
     
     # Mock Data Configuration
-    use_mock_data_on_error: bool = True
+    use_mock_data_on_error: bool = False
     
     # Alert Processing
     max_concurrent_alerts: int = 5
