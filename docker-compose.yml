@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   agentic-soc:
+    platform: linux/amd64
     build: .
+    image: vikas9012/agentic-soc:latest
     ports:
       - "8000:8000"
     environment:
