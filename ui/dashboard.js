@@ -356,7 +356,9 @@ function updateWorkflowSession(workflowId, alertData) {
             noiseScore: null,
             investigationRequired: null,
             reasoning: null,
-            keyIndicators: null
+            keyIndicators: null,
+            decisionResult: null,
+            allAgentsCompleted: false
         };
     }
 
@@ -435,58 +437,46 @@ function renderWorkflowSession(sessionElement, workflowId) {
 
     html += `</div>`;
 
-    // Add final verdict section if available
-    if (data.verdict) {
+    // Add final verdict section if all agents completed and decision result available
+    if (data.allAgentsCompleted && data.decisionResult) {
+        const decision = data.decisionResult;
         html += `
             <div class="workflow-section">
                 <div class="workflow-section-title">✅ FINAL VERDICT</div>
                 <div class="workflow-field">
                     <span class="workflow-label">VERDICT</span>
-                    <span class="workflow-value">: ${data.verdict}</span>
+                    <span class="workflow-value">: ${decision.final_verdict || decision.verdict || 'N/A'}</span>
+                </div>
+                <div class="workflow-field">
+                    <span class="workflow-label">PRIORITY</span>
+                    <span class="workflow-value">: ${decision.priority || 'N/A'}</span>
                 </div>
                 <div class="workflow-field">
                     <span class="workflow-label">CONFIDENCE</span>
-                    <span class="workflow-value">: ${data.confidence || 'N/A'}</span>
+                    <span class="workflow-value">: ${decision.confidence || decision.confidence_score || 'N/A'}</span>
                 </div>
                 <div class="workflow-field">
-                    <span class="workflow-label">NOISE SCORE</span>
-                    <span class="workflow-value">: ${data.noiseScore || 'N/A'}</span>
+                    <span class="workflow-label">ESCALATION REQUIRED</span>
+                    <span class="workflow-value">: ${decision.escalation_required ? 'YES' : 'NO'}</span>
                 </div>
                 <div class="workflow-field">
-                    <span class="workflow-label">INVESTIGATION REQUIRED</span>
-                    <span class="workflow-value">: ${data.investigationRequired || 'N/A'}</span>
+                    <span class="workflow-label">REASONING</span>
+                    <span class="workflow-value">: ${decision.reasoning || decision.rationale || 'N/A'}</span>
+                </div>
+                <div class="workflow-field">
+                    <span class="workflow-label">ESTIMATED IMPACT</span>
+                    <span class="workflow-value">: ${decision.estimated_impact || 'N/A'}</span>
+                </div>
+                <div class="workflow-field">
+                    <span class="workflow-label">RECOMMENDED ACTIONS</span>
+                    <div class="workflow-value">
+                        ${decision.recommended_actions && decision.recommended_actions.length > 0
+                            ? decision.recommended_actions.map(action => `• ${action}`).join('<br>')
+                            : ': N/A'
+                        }
+                    </div>
                 </div>
         `;
-
-        // Add collapsible reasoning
-        if (data.reasoning) {
-            html += `
-                <div class="collapsible-group" data-workflow="${workflowId}" data-field="reasoning">
-                    <div class="collapsible-header" onclick="toggleCollapsible('${workflowId}', 'reasoning')">
-                        <span class="collapsible-toggle">▶</span>
-                        <span class="collapsible-title">REASONING</span>
-                    </div>
-                    <div class="collapsible-content" id="workflow-${workflowId}-reasoning">
-                        <div class="collapsible-log-line">${data.reasoning}</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Add collapsible key indicators
-        if (data.keyIndicators) {
-            html += `
-                <div class="collapsible-group" data-workflow="${workflowId}" data-field="keyIndicators">
-                    <div class="collapsible-header" onclick="toggleCollapsible('${workflowId}', 'keyIndicators')">
-                        <span class="collapsible-toggle">▶</span>
-                        <span class="collapsible-title">KEY INDICATORS</span>
-                    </div>
-                    <div class="collapsible-content" id="workflow-${workflowId}-keyIndicators">
-                        <div class="collapsible-log-line">${data.keyIndicators}</div>
-                    </div>
-                </div>
-            `;
-        }
 
         html += `</div>`;
     }
@@ -543,10 +533,28 @@ function updateAgentStatus(workflowId, agentName, status, logMessage = null) {
         agent.logs.push(logMessage);
     }
     
+    // Check if all agents are completed
+    checkAllAgentsCompleted(workflowId);
+    
     // Re-render the workflow session
     const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
     if (session) {
         renderWorkflowSession(session, workflowId);
+    }
+}
+
+// Check if all agents have completed
+function checkAllAgentsCompleted(workflowId) {
+    if (!workflowData[workflowId]) return;
+    
+    const agents = workflowData[workflowId].agents;
+    const allCompleted = Object.values(agents).every(agent => 
+        agent.status === 'Completed' || agent.status === 'Failed'
+    );
+    
+    if (allCompleted && !workflowData[workflowId].allAgentsCompleted) {
+        workflowData[workflowId].allAgentsCompleted = true;
+        console.log(`[${workflowId.substring(0, 8)}] All agents completed`);
     }
 }
 
@@ -602,6 +610,30 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                 return;
             }
 
+            // Log full JSON payload for agent result messages
+            if (msg.result) {
+                console.log(`[WS:${shortId}] Agent ${msg.stage} result:`, JSON.stringify(msg.result, null, 2));
+                
+                // Store decision agent result separately
+                let agentName = msg.stage.toLowerCase();
+                if (agentName === 'respond') agentName = 'response';
+                
+                if (agentName === 'decision' && workflowData[workflowId]) {
+                    workflowData[workflowId].decisionResult = msg.result;
+                    console.log(`[WS:${shortId}] Stored decision result:`, msg.result);
+                }
+                
+                // Add to agent logs in the UI
+                if (workflowData[workflowId] && workflowData[workflowId].agents[agentName]) {
+                    workflowData[workflowId].agents[agentName].logs.push(`Result: ${JSON.stringify(msg.result, null, 2)}`);
+                    // Re-render the workflow session to show the new log
+                    const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
+                    if (session) {
+                        renderWorkflowSession(session, workflowId);
+                    }
+                }
+            }
+
             // Update agent status based on message type
             if (msg.stage) {
                 let agentName = msg.stage.toLowerCase();
@@ -620,7 +652,7 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                     }
                     logMessage = msg.message || msg.status || 'Status update';
                 }
-
+                
                 if (msg.type === 'agent_output' && msg.details) {
                     logMessage = msg.details;
                     // Keep existing status unless specified
@@ -630,10 +662,10 @@ function connectWorkflowWebSocket(workflowId, alertData) {
             }
 
             // Handle final verdict/decision
-            if (msg.type === 'final' || (msg.stage === 'decision' && msg.verdict)) {
+             if (msg.type === 'final' || (msg.stage === 'decision' && msg.verdict)) {
                 console.log(`[WS:${shortId}] Processing final verdict:`, msg.verdict || msg.final_verdict);
                 const verdictData = {
-                    verdict: msg.verdict || msg.final_verdict || 'Unknown',
+                     verdict: msg.verdict || msg.final_verdict || 'Unknown',
                     confidence: msg.confidence || msg.confidence_score,
                     noise_score: msg.noise_score,
                     investigation_required: msg.investigation_required || false,
