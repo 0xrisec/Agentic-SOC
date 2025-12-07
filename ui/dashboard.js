@@ -153,7 +153,7 @@ function selectFile(fileId) {
             ...alert,
             fileId: fileId,
             alertIndex: index,
-            displayId: `${file.name}-${index + 1}`
+            displayId: alert.alert_id || `Alert-${index + 1}`
         }));
         selectedAlerts.clear();
         renderAlertsList();
@@ -393,7 +393,7 @@ function renderWorkflowSession(sessionElement, workflowId) {
 
         <div class="workflow-content expanded" id="workflow-content-${workflowId}">
             <div class="workflow-section">
-            <div class="workflow-section-title">📌 ALERT DETAILS</div>
+            <div class="workflow-section-title">ALERT DETAILS</div>
             <div class="workflow-field">
                 <span class="workflow-label">Alert ID</span>
                 <span class="workflow-value">: ${data.alertId}</span>
@@ -405,7 +405,7 @@ function renderWorkflowSession(sessionElement, workflowId) {
         </div>
 
         <div class="workflow-section">
-            <div class="workflow-section-title">🔍 AGENTIC SOC WORKFLOW</div>
+            <div class="workflow-section-title">AGENTIC SOC WORKFLOW</div>
     `;
 
     // Add agent collapsible sections
@@ -442,7 +442,7 @@ function renderWorkflowSession(sessionElement, workflowId) {
         const decision = data.decisionResult;
         html += `
             <div class="workflow-section">
-                <div class="workflow-section-title">✅ FINAL VERDICT</div>
+                <div class="workflow-section-title">FINAL VERDICT</div>
                 <div class="workflow-field">
                     <span class="workflow-label">VERDICT</span>
                     <span class="workflow-value">: ${decision.final_verdict || decision.verdict || 'N/A'}</span>

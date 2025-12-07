@@ -1,18 +1,18 @@
 /* Agentic SOC Dashboard Styles */
 
 :root {
-    --primary-color: #2563eb;
-    --secondary-color: #64748b;
+    --primary-color: #0E1D40;
+    --secondary-color: #CCF5AC;
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --danger-color: #ef4444;
     --info-color: #06b6d4;
-    --dark-bg: #0f172a;
-    --card-bg: #1e293b;
-    --border-color: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --dark-bg: #F1F0F8;
+    --card-bg: #FFFFFF;
+    --border-color: #E5E7EB;
+    --text-primary: #0E1D40;
+    --text-secondary: #6B7280;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     --left-panel-width: 250px;
     --right-panel-width: 650px;
 }
@@ -39,8 +39,8 @@ body {
 
 /* Header */
 .dashboard-header {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border-bottom: 2px solid var(--primary-color);
+    background: var(--primary-color);
+    border-bottom: 2px solid var(--secondary-color);
     padding: 1.5rem 2rem;
     box-shadow: var(--shadow);
 }
@@ -56,12 +56,12 @@ body {
 .logo-section h1 {
     font-size: 2rem;
     margin-bottom: 0.25rem;
-    color: var(--primary-color);
+    color: white;
 }
 
 .subtitle {
     font-size: 0.9rem;
-    color: var(--text-secondary);
+    color: var(--secondary-color);
 }
 
 .header-actions {
@@ -71,7 +71,7 @@ body {
 
 /* Buttons */
 .btn {
-    padding: 0.625rem 1.25rem;
+    padding: 7px;
     border: none;
     border-radius: 0.5rem;
     font-size: 0.9rem;
@@ -159,8 +159,7 @@ body {
 }
 
 .metric-icon {
-    font-size: 1.5rem;
-    opacity: 0.8;
+    display: none;
 }
 
 .metric-content {
@@ -197,8 +196,7 @@ body {
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    max-height: 100vh; /* Ensure it doesn't exceed the viewport height */
+    max-height: 70vh; /* Limit height like right panel */
     overflow-y: auto; /* Enable vertical scrolling */
 }
 
@@ -214,8 +212,8 @@ body {
     background: var(--dark-bg);
     display: flex;
     flex-direction: column;
-    padding: 1rem;
     overflow-y: auto;
+    max-height: 70vh; /* Limit height like right panel */
 }
 
 /* Right Panel: Terminal */
@@ -226,7 +224,7 @@ body {
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    
 }
 
 .right-panel.collapsed {
@@ -473,18 +471,18 @@ body {
 .workflow-session {
     margin: 1.5rem 0;
     padding: 1rem;
-    border: 2px solid #334155;
+    border: 2px solid var(--border-color);
     border-radius: 0.5rem;
-    background: #0a0f1a;
+    background: var(--card-bg);
 }
 
 .workflow-header {
-    color: #60a5fa;
+    color: var(--primary-color);
     font-weight: bold;
     font-size: 0.9rem;
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
-    border-bottom: 2px solid #334155;
+    border-bottom: 2px solid var(--border-color);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -492,7 +490,7 @@ body {
 }
 
 .workflow-toggle {
-    color: #60a5fa;
+    color: var(--primary-color);
     font-size: 0.85rem;
     user-select: none;
 }
@@ -511,11 +509,11 @@ body {
 }
 
 .workflow-section-title {
-    color: #fbbf24;
+    color: #333333;
     font-weight: bold;
     font-size: 0.85rem;
     margin-bottom: 0.5rem;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid var(--border-color);
     padding-bottom: 0.25rem;
 }
 
@@ -528,22 +526,22 @@ body {
 }
 
 .workflow-label {
-    color: #94a3b8;
+    color: var(--text-secondary);
     font-size: 0.8rem;
 }
 
 .workflow-value {
-    color: #e2e8f0;
+    color: var(--text-primary);
     font-size: 0.8rem;
 }
 
 .workflow-separator {
     margin: 1.5rem 0;
-    border-bottom: 2px solid #1e293b;
+    border-bottom: 2px solid var(--border-color);
 }
 
 .workflow-divider {
-    color: #475569;
+    color: var(--text-secondary);
     text-align: center;
     margin: 1rem 0;
     font-size: 0.75rem;
@@ -557,7 +555,7 @@ body {
 .collapsible-header {
     cursor: pointer;
     padding: 0.4rem 0.6rem;
-    background: #1a1f2e;
+    background: var(--card-bg);
     border-radius: 0.25rem;
     display: flex;
     align-items: center;
@@ -570,13 +568,13 @@ body {
 }
 
 .collapsible-toggle {
-    color: #60a5fa;
+    color: var(--primary-color);
     font-size: 0.85rem;
     user-select: none;
 }
 
 .collapsible-title {
-    color: #94a3b8;
+    color: var(--text-secondary);
     font-size: 0.8rem;
     flex: 1;
 }
@@ -597,8 +595,8 @@ body {
 
 .collapsible-content {
     padding: 0.75rem 1.5rem;
-    background: #0d1117;
-    border-left: 2px solid #334155;
+    background: var(--card-bg);
+    border-left: 2px solid var(--border-color);
     margin-left: 0.5rem;
     margin-top: 0.25rem;
     border-radius: 0 0 0.25rem 0.25rem;
@@ -610,7 +608,7 @@ body {
 }
 
 .collapsible-log-line {
-    color: #94a3b8;
+    color: var(--text-secondary);
     font-size: 0.75rem;
     padding: 0.2rem 0;
     line-height: 1.4;
@@ -622,11 +620,11 @@ body {
 }
 
 .terminal-line.system {
-    color: #fbbf24;
+    color: var(--secondary-color);
 }
 
 .terminal-line.agent {
-    color: #60a5fa;
+    color: var(--primary-color);
 }
 
 .terminal-line.success {
@@ -642,7 +640,7 @@ body {
 }
 
 .timestamp {
-    color: #94a3b8;
+    color: var(--text-secondary);
     margin-right: 0.5rem;
     font-size: 0.75rem;
 }
@@ -776,8 +774,9 @@ body {
 
 .modal-header {
     padding: 1.5rem 2rem;
-    background: var(--dark-bg);
-    border-bottom: 2px solid var(--primary-color);
+    background: var(--primary-color);
+    color: white;
+    border-bottom: 2px solid var(--secondary-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -785,10 +784,11 @@ body {
 
 .modal-header h2 {
     margin: 0;
+    color: white;
 }
 
 .close {
-    color: var(--text-secondary);
+    color: white;
     font-size: 2rem;
     font-weight: 300;
     cursor: pointer;
@@ -796,7 +796,7 @@ body {
 }
 
 .close:hover {
-    color: var(--text-primary);
+    color: var(--secondary-color);
 }
 
 .modal-body {
