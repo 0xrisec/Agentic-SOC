@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  agentic-soc:
+    platform: linux/amd64
+    build: .
+    image: vikas9012/agentic-soc:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - API_HOST=${API_HOST}
+      - API_PORT=${API_PORT}
+      - API_RELOAD=${API_RELOAD}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - TRIAGE_TEMPERATURE=${TRIAGE_TEMPERATURE}
+      - INVESTIGATION_TEMPERATURE=${INVESTIGATION_TEMPERATURE}
+      - DECISION_TEMPERATURE=${DECISION_TEMPERATURE}
+      - RESPONSE_TEMPERATURE=${RESPONSE_TEMPERATURE}
+      - MAX_CONCURRENT_ALERTS=${MAX_CONCURRENT_ALERTS}
+      - ALERT_TIMEOUT_SECONDS=${ALERT_TIMEOUT_SECONDS}
+      - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS}
+      - USE_MOCK_DATA_ON_ERROR=${USE_MOCK_DATA_ON_ERROR}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped

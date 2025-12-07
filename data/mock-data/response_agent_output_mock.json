@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2025-12-06T10:41:56.462593Z",
+  "final_verdict": "true_positive",
+  "priority": "P1",
+  "incident": {
+    "ticket_id": "INC-20251206-ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+    "status": "IN_PROGRESS",
+    "category": "Security Incident",
+    "subcategory": "Password Spray",
+    "title": "Password Spray - devops-vm",
+    "description": "Confirmed password spray against devops-vm; 135 failed logons from 194.169.175.17; coordinated campaign suspected",
+    "affected_assets": {
+      "host": "devops-vm",
+      "ip": "194.169.175.17",
+      "users_sample": [
+        "elearningline",
+        "edgix",
+        "eclub",
+        "efnc",
+        "ecnp"
+      ]
+    },
+    "mitre": {
+      "tactics": [
+        "Credential Access"
+      ],
+      "techniques": [
+        "T1110"
+      ]
+    },
+    "analysis_summary": {
+      "triage_verdict": "true_positive",
+      "investigation_risk_score": 8.5,
+      "final_decision": "true_positive",
+      "confidence": 0.95
+    },
+    "actions_taken": [
+      "Blocked IPs at firewall: 194.169.175.17, 194.169.175.31, 45.151.99.126, 77.90.185.230, 77.90.185.231, 77.90.185.7",
+      "Isolated devops-vm from production network",
+      "Initiated forensic collection"
+    ],
+    "recommended_next_steps": [
+      "Force password resets for targeted accounts",
+      "Enable MFA on privileged accounts",
+      "Hunt for lateral movement from devops-vm"
+    ],
+    "assigned_to": "SOC-L2",
+    "sla": "15 minutes",
+    "created": "2025-12-06T10:41:56.462593Z",
+    "last_updated": "2025-12-06T10:41:56.462593Z"
+  },
+  "notifications": {
+    "subjects": {
+      "email": "[P1 CRITICAL] Password Spray - devops-vm",
+      "sms": "P1: Password Spray on devops-vm",
+      "slack": "[P1] devops-vm password spray incident started"
+    },
+    "recipients": {
+      "soc_lead": "soc-lead@company.com",
+      "ir_oncall": "ir-oncall@company.com",
+      "ciso": "ciso@company.com",
+      "devops_manager": "devops-manager@company.com"
+    },
+    "channels": [
+      "Email",
+      "SMS",
+      "Slack"
+    ],
+    "war_room": "#incident-INC-20251206"
+  },
+  "automation": {
+    "network": {
+      "firewall_rule_id": "BLOCK-MALICIOUS-IPS-20251206"
+    },
+    "endpoint": {
+      "isolation": {
+        "host": "devops-vm",
+        "vlan": "quarantine"
+      }
+    },
+    "account": {
+      "password_reset_scope": "targeted_accounts"
+    }
+  },
+  "summary": {
+    "alert": "Password Spray - devops-vm",
+    "verdict": "true_positive (95% confidence)",
+    "priority": "P1",
+    "asset": "devops-vm",
+    "impact": "HIGH",
+    "description": "Critical password spray attack detected against DevOps infrastructure from multiple malicious IPs; containment actions executed; IR escalation complete.",
+    "ticket": "INC-20251206-ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+    "analyst": "SOC-L2"
+  }
+}

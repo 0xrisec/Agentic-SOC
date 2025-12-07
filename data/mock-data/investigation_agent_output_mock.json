@@ -1,0 +1,244 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at_utc": "2025-12-06T10:44:52.021409Z",
+  "investigations": [
+    {
+      "schema_version": "1.0.0",
+      "generated_at_utc": "2025-12-06T10:44:52.021409Z",
+      "alert_id": "ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+      "findings": [
+        "135 failed authentication attempts detected from 194.169.175.17",
+        "All attempts targeted distinct user accounts (no repetition)",
+        "Attack occurred within ~11-minute window (16:20:40 to 16:31:59 UTC)",
+        "Source IP 194.169.175.17 external to org ranges",
+        "No successful authentications from this IP observed",
+        "Pattern matches classic password spray technique"
+      ],
+      "threat_context": {
+        "source_ip": "194.169.175.17",
+        "reputation": "known malicious; previously seen in credential attacks",
+        "ttp": [
+          "T1110",
+          "T1110.003"
+        ],
+        "actor": "Opportunistic Attackers",
+        "similar_sources": [
+          "194.169.175.31",
+          "45.151.99.126",
+          "77.90.185.230",
+          "77.90.185.231",
+          "77.90.185.7"
+        ]
+      },
+      "related_alerts": [
+        "ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.31-1729182041",
+        "ALERT-PASSWORD-SPRAY-devops-vm-45.151.99.126-1729182040",
+        "ALERT-PASSWORD-SPRAY-devops-vm-77.90.185.230-1729182040",
+        "ALERT-SUCCESS-AFTER-BRUTE-devops-vm-1729243785"
+      ],
+      "attack_chain": [
+        {
+          "stage": "Initial Access",
+          "detail": "External reconnaissance of exposed services"
+        },
+        {
+          "stage": "Credential Access",
+          "detail": "Password spray attack (T1110.003)"
+        },
+        {
+          "stage": "Potential",
+          "detail": "Subsequent successful authentication (see related alert)"
+        }
+      ],
+      "risk_score": 8.5,
+      "risk_breakdown": {
+        "asset_criticality": 3.0,
+        "attack_sophistication": 2.0,
+        "potential_impact": 3.5
+      },
+      "evidence": {
+        "time_window_utc": [
+          "2024-10-17T16:20:40.274000Z",
+          "2024-10-17T16:31:59.557000Z"
+        ],
+        "failed_logons": 135,
+        "distinct_accounts": 135,
+        "source_ip": "194.169.175.17",
+        "target_asset": "devops-vm",
+        "method": "Network logon type 3",
+        "accounts_sample": [
+          "elearningline",
+          "edgix",
+          "eclub",
+          "efnc",
+          "ecnp"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "generated_at_utc": "2025-12-06T10:44:52.021409Z",
+      "alert_id": "ALERT-PASSWORD-SPRAY-devops-vm-45.151.99.126-1729182040",
+      "findings": [
+        "167 failed authentication attempts detected from 45.151.99.126",
+        "Distinct accounts targeted across short window",
+        "External IP; high-confidence malicious per TI",
+        "Pattern matches password spray across many accounts"
+      ],
+      "threat_context": {
+        "source_ip": "45.151.99.126",
+        "reputation": "known malicious password spray infrastructure",
+        "ttp": [
+          "T1110",
+          "T1110.003"
+        ],
+        "actor": "Opportunistic Attackers"
+      },
+      "related_alerts": [
+        "ALERT-PASSWORD-SPRAY-devops-vm-194.169.175.17-1729182040",
+        "ALERT-PASSWORD-SPRAY-devops-vm-77.90.185.230-1729182040"
+      ],
+      "attack_chain": [
+        {
+          "stage": "Credential Access",
+          "detail": "Password spray (T1110.003)"
+        }
+      ],
+      "risk_score": 8.2,
+      "risk_breakdown": {
+        "asset_criticality": 3.0,
+        "attack_sophistication": 2.0,
+        "potential_impact": 3.2
+      },
+      "evidence": {
+        "time_window_utc": [
+          "2024-10-17T16:20:40.145000Z",
+          "2024-10-17T16:31:59.658000Z"
+        ],
+        "failed_logons": 167,
+        "distinct_accounts": 167,
+        "source_ip": "45.151.99.126",
+        "target_asset": "devops-vm",
+        "method": "Network logon type 3",
+        "accounts_sample": [
+          "gen5",
+          "gengirlmedia",
+          "getitfree",
+          "gjsigns",
+          "gesoft"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "generated_at_utc": "2025-12-06T10:44:52.021409Z",
+      "alert_id": "ALERT-PASSWORD-SPRAY-devops-vm-77.90.185.230-1729182040",
+      "findings": [
+        "143 failed authentication attempts detected from 77.90.185.230",
+        "High volume spray against devops-vm",
+        "External IP; campaign overlaps with 77.90.185.231"
+      ],
+      "threat_context": {
+        "source_ip": "77.90.185.230",
+        "reputation": "known malicious; part of coordinated infrastructure",
+        "ttp": [
+          "T1110",
+          "T1110.003"
+        ]
+      },
+      "related_alerts": [
+        "ALERT-PASSWORD-SPRAY-devops-vm-77.90.185.231-1729182041"
+      ],
+      "attack_chain": [
+        {
+          "stage": "Credential Access",
+          "detail": "Password spray (T1110.003)"
+        }
+      ],
+      "risk_score": 8.1,
+      "risk_breakdown": {
+        "asset_criticality": 3.0,
+        "attack_sophistication": 2.0,
+        "potential_impact": 3.1
+      },
+      "evidence": {
+        "time_window_utc": [
+          "2024-10-17T16:20:40.037000Z",
+          "2024-10-17T16:31:59.134000Z"
+        ],
+        "failed_logons": 143,
+        "distinct_accounts": 143,
+        "source_ip": "77.90.185.230",
+        "target_asset": "devops-vm",
+        "method": "Network logon type 3",
+        "accounts_sample": [
+          "spgb",
+          "solereve",
+          "soundfest",
+          "soloworker",
+          "spillman"
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "generated_at_utc": "2025-12-06T10:44:52.021409Z",
+      "alert_id": "ALERT-SUCCESS-AFTER-BRUTE-devops-vm-1729243785",
+      "findings": [
+        "Successful logon on devops-vm following 19 prior failures within 10 minutes",
+        "Failures originated from 6 unique source IPs targeting 19 accounts",
+        "Temporal proximity suggests possible credential stuffing/spray leading to success"
+      ],
+      "threat_context": {
+        "candidate_source_ips": [
+          "66.90.100.200",
+          "40.90.100.200",
+          "45.130.145.166",
+          "45.130.145.159",
+          "87.120.112.181",
+          "45.130.145.161"
+        ],
+        "ttp": [
+          "T1110"
+        ],
+        "actor": "Unknown"
+      },
+      "related_alerts": [
+        "ALERT-PASSWORD-SPRAY-devops-vm-66.90.100.200-1729243761",
+        "ALERT-PASSWORD-SPRAY-devops-vm-66.90.100.200-1729245780"
+      ],
+      "attack_chain": [
+        {
+          "stage": "Credential Access",
+          "detail": "Multiple failed logons from distributed IPs"
+        },
+        {
+          "stage": "Execution",
+          "detail": "Successful authentication (4624)"
+        },
+        {
+          "stage": "Lateral Movement",
+          "detail": "To be assessed; monitor for RDP/SMB/SSH attempts"
+        }
+      ],
+      "risk_score": 7.6,
+      "risk_breakdown": {
+        "asset_criticality": 3.0,
+        "attack_sophistication": 2.0,
+        "potential_impact": 2.6
+      },
+      "evidence": {
+        "success_time_utc": "2024-10-18T09:29:45.342000Z",
+        "total_prior_failures": 19,
+        "unique_source_ips": 6,
+        "target_accounts_sample": [
+          "weatheronline",
+          "weischermedia",
+          "webakebread",
+          "wehousing",
+          "rivaldiputrad"
+        ]
+      }
+    }
+  ]
+}
