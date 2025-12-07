@@ -141,31 +141,34 @@ class InvestigationAgent:
             return state
             
         except Exception as e:
-            # Fallback to mock data
-            mock_data = {
-                "findings": ["Potential credential access attempt detected"],
-                "threat_context": {"threat_type": "Credential Access", "confidence": 0.85},
-                "related_alerts": ["Alert1", "Alert2"],
-                "attack_chain": ["Reconnaissance", "Credential Access"],
-                "risk_score": 8.5,
-                "evidence": {"details": ["IP address 192.168.1.1", "Failed login attempts"]},
-                "timestamp": datetime.utcnow().isoformat()
-            }
+            if settings.use_mock_data_on_error:
+                # Fallback to mock data
+                mock_data = {
+                    "findings": ["Potential credential access attempt detected"],
+                    "threat_context": {"threat_type": "Credential Access", "confidence": 0.85},
+                    "related_alerts": ["Alert1", "Alert2"],
+                    "attack_chain": ["Reconnaissance", "Credential Access"],
+                    "risk_score": 8.5,
+                    "evidence": {"details": ["IP address 192.168.1.1", "Failed login attempts"]},
+                    "timestamp": datetime.utcnow().isoformat()
+                }
 
-            investigation_result = InvestigationResult(
-                findings=mock_data["findings"],
-                threat_context=mock_data["threat_context"],
-                related_alerts=mock_data["related_alerts"],
-                attack_chain=mock_data["attack_chain"],
-                risk_score=mock_data["risk_score"],
-                evidence=mock_data["evidence"],
-                timestamp=mock_data["timestamp"]
-            )
+                investigation_result = InvestigationResult(
+                    findings=mock_data["findings"],
+                    threat_context=mock_data["threat_context"],
+                    related_alerts=mock_data["related_alerts"],
+                    attack_chain=mock_data["attack_chain"],
+                    risk_score=mock_data["risk_score"],
+                    evidence=mock_data["evidence"],
+                    timestamp=mock_data["timestamp"]
+                )
 
-            state.investigation_result = investigation_result
-            state.errors.append(f"Investigation agent error: {str(e)}")
-            state.status = AlertStatus.COMPLETED
-            return state
+                state.investigation_result = investigation_result
+                state.errors.append(f"Investigation agent error: {str(e)}")
+                state.status = AlertStatus.COMPLETED
+                return state
+            else:
+                raise e
     
     def _parse_response(self, content: str) -> Dict[str, Any]:
         """Parse LLM response to extract structured data"""

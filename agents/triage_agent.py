@@ -94,35 +94,38 @@ class TriageAgent:
             return state
 
         except Exception as e:
-            # Fallback to mock data
-            mock_data = {
-                "verdict": "true_positive",
-                "confidence": 0.95,
-                "noise_score": 0.05,
-                "requires_investigation": True,
-                "key_indicators": [
-                    "135 failures across 135 distinct accounts",
-                    "External source IP 194.169.175.17",
-                    "Short window and T1110 pattern",
-                    "No successful auth from the source"
-                ],
-                "reasoning": "High-volume failures from an external IP matching password spray. Pattern and counts are consistent with Credential Access T1110; treat as active attack requiring investigation."
-            }
+            if settings.use_mock_data_on_error:
+                # Fallback to mock data
+                mock_data = {
+                    "verdict": "true_positive",
+                    "confidence": 0.95,
+                    "noise_score": 0.05,
+                    "requires_investigation": True,
+                    "key_indicators": [
+                        "135 failures across 135 distinct accounts",
+                        "External source IP 194.169.175.17",
+                        "Short window and T1110 pattern",
+                        "No successful auth from the source"
+                    ],
+                    "reasoning": "High-volume failures from an external IP matching password spray. Pattern and counts are consistent with Credential Access T1110; treat as active attack requiring investigation."
+                }
 
-            triage_result = TriageResult(
-                verdict=Verdict(mock_data["verdict"]),
-                confidence=mock_data["confidence"],
-                reasoning=mock_data["reasoning"],
-                noise_score=mock_data["noise_score"],
-                requires_investigation=mock_data["requires_investigation"],
-                key_indicators=mock_data["key_indicators"],
-                timestamp=datetime.utcnow().isoformat()
-            )
+                triage_result = TriageResult(
+                    verdict=Verdict(mock_data["verdict"]),
+                    confidence=mock_data["confidence"],
+                    reasoning=mock_data["reasoning"],
+                    noise_score=mock_data["noise_score"],
+                    requires_investigation=mock_data["requires_investigation"],
+                    key_indicators=mock_data["key_indicators"],
+                    timestamp=datetime.utcnow().isoformat()
+                )
 
-            state.triage_result = triage_result
-            state.errors.append(f"Triage agent error: {str(e)}")
-            state.status = AlertStatus.COMPLETED
-            return state
+                state.triage_result = triage_result
+                state.errors.append(f"Triage agent error: {str(e)}")
+                state.status = AlertStatus.COMPLETED
+                return state
+            else:
+                raise e
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
         """Parse LLM response to extract structured data"""

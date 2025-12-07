@@ -239,31 +239,34 @@ class ResponseAgent:
             return state
             
         except Exception as e:
-            # Fallback to mock data
-            mock_data = {
-                "actions_taken": ["Block IP 192.168.1.1", "Create incident ticket"],
-                "ticket_id": self._generate_ticket_id(),
-                "notifications_sent": ["SOC Team notified", "Incident response team alerted"],
-                "automation_applied": ["Firewall rule created", "Account monitoring enabled"],
-                "status": "COMPLETED",
-                "summary": "Alert processed successfully with automated response actions",
-                "timestamp": datetime.utcnow().isoformat()
-            }
+            if settings.use_mock_data_on_error:
+                # Fallback to mock data
+                mock_data = {
+                    "actions_taken": ["Block IP 192.168.1.1", "Create incident ticket"],
+                    "ticket_id": self._generate_ticket_id(),
+                    "notifications_sent": ["SOC Team notified", "Incident response team alerted"],
+                    "automation_applied": ["Firewall rule created", "Account monitoring enabled"],
+                    "status": "COMPLETED",
+                    "summary": "Alert processed successfully with automated response actions",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
 
-            response_result = ResponseResult(
-                actions_taken=mock_data["actions_taken"],
-                ticket_id=mock_data["ticket_id"],
-                notifications_sent=mock_data["notifications_sent"],
-                automation_applied=mock_data["automation_applied"],
-                status=mock_data["status"],
-                summary=mock_data["summary"],
-                timestamp=mock_data["timestamp"]
-            )
+                response_result = ResponseResult(
+                    actions_taken=mock_data["actions_taken"],
+                    ticket_id=mock_data["ticket_id"],
+                    notifications_sent=mock_data["notifications_sent"],
+                    automation_applied=mock_data["automation_applied"],
+                    status=mock_data["status"],
+                    summary=mock_data["summary"],
+                    timestamp=mock_data["timestamp"]
+                )
 
-            state.response_result = response_result
-            state.errors.append(f"Response agent error: {str(e)}")
-            state.status = AlertStatus.COMPLETED
-            return state
+                state.response_result = response_result
+                state.errors.append(f"Response agent error: {str(e)}")
+                state.status = AlertStatus.COMPLETED
+                return state
+            else:
+                raise e
             
  
     def _parse_response(self, content: str) -> Dict[str, Any]:
