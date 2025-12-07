@@ -17,6 +17,14 @@ python run.py
 
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
+# Docker container
+
+docker build --platform linux/amd64 -t vikas9012/agentic-soc:latest .
+docker push vikas9012/agentic-soc:new123
+
+ docker-compose up -d
+ docker-compose ps
+
 # 🛡️ Agentic SOC 
 
 ## End-to-End Proof of Concept
