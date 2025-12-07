@@ -45,21 +45,36 @@ class SOCOrchestrator:
         # Define edges
         workflow.set_entry_point("triage")
         
-        # After triage, decide whether to investigate
+        # After triage, decide whether to investigate, decide, or end if failed
         workflow.add_conditional_edges(
             "triage",
-            self._should_investigate,
+            self._after_triage,
             {
                 "investigate": "investigate",
-                "decide": "decide"
+                "decide": "decide",
+                END: END
             }
         )
         
-        # After investigation, go to decision
-        workflow.add_edge("investigate", "decide")
+        # After investigation, go to decision or end if failed
+        workflow.add_conditional_edges(
+            "investigate",
+            self._after_investigation,
+            {
+                "decide": "decide",
+                END: END
+            }
+        )
         
-        # After decision, go to response
-        workflow.add_edge("decide", "respond")
+        # After decision, go to response or end if failed
+        workflow.add_conditional_edges(
+            "decide",
+            self._after_decision,
+            {
+                "respond": "respond",
+                END: END
+            }
+        )
         
         # After response, end
         workflow.add_edge("respond", END)
@@ -152,7 +167,7 @@ class SOCOrchestrator:
         except Exception as e:
             logger.error(f"Investigation node error: {str(e)}")
             state.errors.append(f"Investigation error: {str(e)}")
-            # Don't fail completely - continue to decision
+            state.status = AlertStatus.FAILED
             if self.event_callback:
                 self.event_callback(state.workflow_id, {"stage": "investigation", "status": "failed", "error": str(e)})
             return {
@@ -234,6 +249,24 @@ class SOCOrchestrator:
         # Otherwise, skip investigation
         return "decide"
     
+    def _after_triage(self, state: SOCWorkflowState) -> str:
+        """Conditional edge after triage"""
+        if state.status == AlertStatus.FAILED:
+            return END
+        return self._should_investigate(state)
+    
+    def _after_investigation(self, state: SOCWorkflowState) -> str:
+        """Conditional edge after investigation"""
+        if state.status == AlertStatus.FAILED:
+            return END
+        return "decide"
+    
+    def _after_decision(self, state: SOCWorkflowState) -> str:
+        """Conditional edge after decision"""
+        if state.status == AlertStatus.FAILED:
+            return END
+        return "respond"
+    
     async def process_alert(self, state: SOCWorkflowState) -> SOCWorkflowState:
         """
         Process a single alert through the complete workflow
@@ -281,9 +314,10 @@ class SOCOrchestrator:
             if self.event_callback:
                 self.event_callback(state.workflow_id, {
                     "stage": "final",
-                    "status": "completed",
+                    "status": "completed" if final_state.status != AlertStatus.FAILED else "failed",
                     "verdict": final_state.decision_result.final_verdict if final_state.decision_result else None,
                     "priority": final_state.decision_result.priority if final_state.decision_result else None,
+                    "message": "Please retry the alert processing." if final_state.status == AlertStatus.FAILED else None,
                 })
             
             return final_state
@@ -292,6 +326,13 @@ class SOCOrchestrator:
             logger.error(f"Workflow error for alert {state.alert.alert_id}: {str(e)}")
             state.errors.append(f"Workflow error: {str(e)}")
             state.status = AlertStatus.FAILED
+            if self.event_callback:
+                self.event_callback(state.workflow_id, {
+                    "stage": "final",
+                    "status": "failed",
+                    "message": "Please retry the alert processing.",
+                    "error": str(e)
+                })
             return state
 
 

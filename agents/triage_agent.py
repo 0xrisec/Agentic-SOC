@@ -69,7 +69,7 @@ class TriageAgent:
             try:
                 response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
             except asyncio.TimeoutError:
-                 raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
+                raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
 
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")
@@ -98,8 +98,8 @@ class TriageAgent:
                 # Fallback to mock data
                 mock_data = {
                     "verdict": "true_positive",
-                    "confidence": 0.95,
-                    "noise_score": 0.05,
+                    "confidence": 0.1,
+                    "noise_score": 0.01,
                     "requires_investigation": True,
                     "key_indicators": [
                         "135 failures across 135 distinct accounts",

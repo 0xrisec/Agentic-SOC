@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     alert_timeout_seconds: int = 300
     
     # LLM Timeout Configuration
-    llm_timeout_seconds: int = Field(default=120, env="LLM_TIMEOUT_SECONDS")
+    llm_timeout_seconds: int = Field(default=40, env="LLM_TIMEOUT_SECONDS")
     
     class Config:
         env_file = ".env"

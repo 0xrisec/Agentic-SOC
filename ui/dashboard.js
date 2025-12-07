@@ -575,8 +575,7 @@ function checkAllAgentsCompleted(workflowId) {
         agent.status === 'Completed' || agent.status === 'Failed'
     );
     
-    if (allCompleted && !workflowData[workflowId].allAgentsCompleted) {
-        workflowData[workflowId].allAgentsCompleted = true;
+    if (allCompleted) {
         console.log(`[${workflowId.substring(0, 8)}] All agents completed`);
     }
 }
@@ -614,6 +613,14 @@ function connectWorkflowWebSocket(workflowId, alertData) {
         ws.onopen = () => {
             console.log(`[WS:${shortId}] WebSocket connection opened successfully`);
             wsConnections[workflowId] = ws;
+            // Set generating indicator
+            if (workflowData[workflowId]) {
+                workflowData[workflowId].allAgentsCompleted = false;
+                const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
+                if (session) {
+                    renderWorkflowSession(session, workflowId);
+                }
+            }
             // Optionally send a ping
             try { 
                 ws.send('ping');
@@ -706,6 +713,31 @@ function connectWorkflowWebSocket(workflowId, alertData) {
                 delete wsConnections[workflowId];
             }
 
+            // Handle final failed status with retry message
+            if (msg.status === 'failed') {
+                console.log(`[WS:${shortId}] Workflow failed with retry message:`, msg.message);
+                
+                // Find the failed agent and add retry message to its logs
+                const agents = workflowData[workflowId]?.agents;
+                if (agents) {
+                    const failedAgent = Object.values(agents).find(agent => agent.status === 'Failed');
+                    if (failedAgent) {
+                        failedAgent.logs.push(`RETRY REQUIRED: ${msg.error}`);
+                        // Re-render the workflow session
+                        const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
+                        if (session) {
+                            renderWorkflowSession(session, workflowId);
+                            scrollTerminalToBottom();
+                        }
+                    }
+                }
+                
+                // Refresh metrics and close connection
+                loadMetrics();
+                try { ws.close(); } catch {}
+                delete wsConnections[workflowId];
+            }
+
             // Handle errors
             if (msg.type === 'error') {
                 console.error(`[WS:${shortId}] Error message received:`, msg.message || 'Unknown error');
@@ -720,6 +752,14 @@ function connectWorkflowWebSocket(workflowId, alertData) {
         };
         ws.onclose = (event) => {
             console.log(`[WS:${shortId}] WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
+            // Set generating indicator to completed
+            if (workflowData[workflowId]) {
+                workflowData[workflowId].allAgentsCompleted = true;
+                const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
+                if (session) {
+                    renderWorkflowSession(session, workflowId);
+                }
+            }
             delete wsConnections[workflowId];
         };
     } catch (e) {
