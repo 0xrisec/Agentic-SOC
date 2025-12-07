@@ -3,6 +3,15 @@ FastAPI Main Application - Agentic SOC POC
 Production-ready REST API for SOC alert processing
 """
 
+import ssl
+import os
+
+# Disable SSL verification for self-signed certificates (POC only)
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Override SSL target name for gRPC
+os.environ['GRPC_SSL_TARGET_NAME_OVERRIDE'] = 'generativelanguage.googleapis.com'
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
