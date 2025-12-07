@@ -16,9 +16,12 @@ import asyncio
 class InvestigationAgent:
     """Agent responsible for deep threat investigation"""
     
-    def __init__(self, threat_intel_path: str = "data/threat_intel.json"):
+    def __init__(self, threat_intel_path: str = "data/threat_intel.json", ai_provider=None, ai_model=None, api_key=None):
         self.llm = get_llm(
-            temperature=settings.investigation_temperature
+            temperature=settings.investigation_temperature,
+            provider=ai_provider,
+            model=ai_model,
+            api_key=api_key
         )
         self.prompt_template = self._load_prompt()
         self.threat_intel_path = threat_intel_path
@@ -183,6 +186,6 @@ class InvestigationAgent:
             raise ValueError(f"Failed to parse investigation response: {str(e)}")
 
 
-def create_investigation_agent() -> InvestigationAgent:
+def create_investigation_agent(ai_provider=None, ai_model=None, api_key=None) -> InvestigationAgent:
     """Factory function to create investigation agent"""
-    return InvestigationAgent()
+    return InvestigationAgent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)

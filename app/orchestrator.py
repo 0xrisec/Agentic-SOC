@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 class SOCOrchestrator:
     """Orchestrates the SOC agent workflow using LangGraph"""
     
-    def __init__(self, event_callback: Callable[[str, Dict[str, Any]], None] | None = None):
+    def __init__(self, event_callback: Callable[[str, Dict[str, Any]], None] | None = None, ai_provider=None, ai_model=None, api_key=None):
         # Initialize agents
-        self.triage_agent = create_triage_agent()
-        self.investigation_agent = create_investigation_agent()
-        self.decision_agent = create_decision_agent()
-        self.response_agent = create_response_agent()
+        self.triage_agent = create_triage_agent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)
+        self.investigation_agent = create_investigation_agent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)
+        self.decision_agent = create_decision_agent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)
+        self.response_agent = create_response_agent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)
         self.event_callback = event_callback
         
         # Build workflow graph
@@ -340,11 +340,12 @@ class SOCOrchestrator:
 _orchestrator_instance = None
 
 
-def get_orchestrator(event_callback: Callable[[str, Dict[str, Any]], None] | None = None) -> SOCOrchestrator:
+def get_orchestrator(event_callback: Callable[[str, Dict[str, Any]], None] | None = None, ai_provider=None, ai_model=None, api_key=None) -> SOCOrchestrator:
     """Get or create global orchestrator instance"""
     global _orchestrator_instance
     
-    if _orchestrator_instance is None:
-        _orchestrator_instance = SOCOrchestrator(event_callback=event_callback)
+    # For now, create a new instance each time to support different AI configs
+    # In production, you might want to cache based on config
+    _orchestrator_instance = SOCOrchestrator(event_callback=event_callback, ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)
     
     return _orchestrator_instance

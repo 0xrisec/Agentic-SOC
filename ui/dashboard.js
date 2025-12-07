@@ -9,6 +9,10 @@ let selectedFileId = null;
 // Track active WebSocket connections globally
 const wsConnections = {};
 let autoScrollTerminal = true;
+// AI Provider settings
+let aiProvider = 'gemini';
+let aiModel = 'gemini-2.5-flash';
+let apiKey = '';
 
 // Initialize dashboard on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // Initialize dashboard
 async function initializeDashboard() {
     await loadMetrics();
+    // Set initial provider button text
+    const setProviderBtn = document.getElementById('setProviderBtn');
+    setProviderBtn.textContent = `Provider: ${aiProvider}`;
 }
 
 // Setup event listeners
@@ -27,6 +34,14 @@ function setupEventListeners() {
     const uploadInput = document.getElementById('uploadInput');
     if (uploadInput) {
         uploadInput.addEventListener('change', handleFileUpload);
+    }
+
+    // Upload button - trigger file input
+    const uploadBtn = document.getElementById('uploadBtn');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', () => {
+            uploadInput.click();
+        });
     }
 
     const clearBtn = document.getElementById('clearBtn');
@@ -63,10 +78,35 @@ function setupEventListeners() {
         closeModalBtn.addEventListener('click', closeModal);
     }
 
+    // Provider modal
+    const setProviderBtn = document.getElementById('setProviderBtn');
+    if (setProviderBtn) {
+        setProviderBtn.addEventListener('click', openProviderModal);
+    }
+
+    const providerModalClose = document.getElementById('providerModalClose');
+    if (providerModalClose) {
+        providerModalClose.addEventListener('click', closeProviderModal);
+    }
+
+    const providerModalCancel = document.getElementById('providerModalCancel');
+    if (providerModalCancel) {
+        providerModalCancel.addEventListener('click', closeProviderModal);
+    }
+
+    const providerForm = document.getElementById('providerForm');
+    if (providerForm) {
+        providerForm.addEventListener('submit', saveProviderSettings);
+    }
+
     window.addEventListener('click', (e) => {
         const modal = document.getElementById('alertModal');
         if (e.target === modal) {
             closeModal();
+        }
+        const providerModal = document.getElementById('providerModal');
+        if (e.target === providerModal) {
+            closeProviderModal();
         }
     });
 
@@ -145,7 +185,7 @@ function renderFileList() {
     
     fileList.innerHTML = uploadedFiles.map(file => `
         <div class="file-item ${selectedFileId === file.id ? 'selected' : ''}" onclick="selectFile('${file.id}')">
-            <div class="file-name">📄 ${file.name}</div>
+            <div class="file-name">${file.name}</div>
             <div class="file-info">${file.uploadTime}</div>
             <div class="file-badge">${file.alertCount} alerts</div>
         </div>
@@ -262,12 +302,16 @@ async function startAnalysis() {
     
     try {
         const enableAI = document.getElementById('enableAIToggle').checked;
+        
         const response = await fetch(`${API_BASE}/api/alerts/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 alerts: selectedAlertsList,
-                enable_ai: enableAI
+                enable_ai: enableAI,
+                ai_provider: aiProvider,
+                ai_model: aiModel,
+                api_key: apiKey
             })
         });
         
@@ -1065,6 +1109,31 @@ async function clearAllWorkflows() {
 // Close modal
 function closeModal() {
     document.getElementById('alertModal').style.display = 'none';
+}
+
+// Open provider modal
+function openProviderModal() {
+    document.getElementById('modalAiProvider').value = aiProvider;
+    document.getElementById('modalAiModel').value = aiModel;
+    document.getElementById('modalApiKey').value = apiKey;
+    document.getElementById('providerModal').style.display = 'block';
+}
+
+// Close provider modal
+function closeProviderModal() {
+    document.getElementById('providerModal').style.display = 'none';
+}
+
+// Save provider settings
+function saveProviderSettings(event) {
+    event.preventDefault();
+    aiProvider = document.getElementById('modalAiProvider').value;
+    aiModel = document.getElementById('modalAiModel').value;
+    apiKey = document.getElementById('modalApiKey').value;
+    closeProviderModal();
+    // Update button text to show current provider
+    const setProviderBtn = document.getElementById('setProviderBtn');
+    setProviderBtn.textContent = `Provider: ${aiProvider}`;
 }
 
 // Show loading overlay

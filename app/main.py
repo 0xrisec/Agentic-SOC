@@ -118,9 +118,6 @@ def _event_callback(workflow_id: str, payload: Dict[str, Any]):
     asyncio.create_task(manager.broadcast(workflow_id, {"type": "progress", **payload}))
 
 
-orchestrator = get_orchestrator(event_callback=_event_callback)
-
-
 # Request/Response Models
 class ProcessAlertRequest(BaseModel):
     """Request to process a new alert"""
@@ -131,6 +128,9 @@ class ProcessBatchRequest(BaseModel):
     """Request to process multiple alerts"""
     alerts: List[Any]
     enable_ai: bool = True
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    api_key: Optional[str] = None
 
 
 class ProcessAlertResponse(BaseModel):
@@ -337,6 +337,7 @@ async def process_workflow(workflow_id: str, state: SOCWorkflowState):
         logger.info(f"Starting background processing for workflow {workflow_id}")
         
         # Process through orchestrator
+        orchestrator = get_orchestrator(event_callback=_event_callback, ai_provider=state.ai_provider, ai_model=state.ai_model, api_key=state.api_key)
         final_state = await orchestrator.process_alert(state)
         
         # Update stored workflow
@@ -543,7 +544,14 @@ async def process_batch(request: ProcessBatchRequest, background_tasks: Backgrou
                 req = ProcessAlertRequest(alert=alert, enable_ai=request.enable_ai)
                 # Generate ID and kick off processing inline (without BackgroundTasks here)
                 workflow_id = str(uuid.uuid4())
-                initial_state = SOCWorkflowState(alert=alert, workflow_id=workflow_id, enable_ai=request.enable_ai)
+                initial_state = SOCWorkflowState(
+                    alert=alert, 
+                    workflow_id=workflow_id, 
+                    enable_ai=request.enable_ai,
+                    ai_provider=request.ai_provider,
+                    ai_model=request.ai_model,
+                    api_key=request.api_key
+                )
                 workflows[workflow_id] = initial_state
                 # Start processing asynchronously
                 import asyncio

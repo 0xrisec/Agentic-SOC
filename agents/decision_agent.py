@@ -16,9 +16,12 @@ import asyncio
 class DecisionAgent:
     """Agent responsible for making final decisions on alerts"""
     
-    def __init__(self):
+    def __init__(self, ai_provider=None, ai_model=None, api_key=None):
         self.llm = get_llm(
-            temperature=settings.decision_temperature
+            temperature=settings.decision_temperature,
+            provider=ai_provider,
+            model=ai_model,
+            api_key=api_key
         )
         self.prompt_template = self._load_prompt()
     
@@ -170,6 +173,6 @@ class DecisionAgent:
             raise ValueError(f"Failed to parse decision response: {str(e)}")
 
 
-def create_decision_agent() -> DecisionAgent:
+def create_decision_agent(ai_provider=None, ai_model=None, api_key=None) -> DecisionAgent:
     """Factory function to create decision agent"""
-    return DecisionAgent()
+    return DecisionAgent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)

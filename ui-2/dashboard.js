@@ -135,7 +135,7 @@ function renderFileList() {
     
     fileList.innerHTML = uploadedFiles.map(file => `
         <div class="file-item ${selectedFileId === file.id ? 'selected' : ''}" onclick="selectFile('${file.id}')">
-            <div class="file-name">📄 ${file.name}</div>
+            <div class="file-name">${file.name}</div>
             <div class="file-info">${file.uploadTime}</div>
             <div class="file-badge">${file.alertCount} alerts</div>
         </div>

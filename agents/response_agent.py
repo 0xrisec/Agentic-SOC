@@ -17,9 +17,12 @@ import asyncio
 class ResponseAgent:
     """Agent responsible for executing response actions"""
     
-    def __init__(self):
+    def __init__(self, ai_provider=None, ai_model=None, api_key=None):
         self.llm = get_llm(
-            temperature=settings.response_temperature
+            temperature=settings.response_temperature,
+            provider=ai_provider,
+            model=ai_model,
+            api_key=api_key
         )
         self.prompt_template = self._load_prompt()
     
@@ -284,6 +287,6 @@ class ResponseAgent:
             raise ValueError(f"Failed to parse response agent output: {str(e)}")
 
 
-def create_response_agent() -> ResponseAgent:
+def create_response_agent(ai_provider=None, ai_model=None, api_key=None) -> ResponseAgent:
     """Factory function to create response agent"""
-    return ResponseAgent()
+    return ResponseAgent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)

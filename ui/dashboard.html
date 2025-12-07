@@ -22,8 +22,9 @@
                             <span class="slider round"></span>
                         </label>
                     </div>
-                    <label class="btn btn-primary" for="uploadInput">Upload Alerts</label>
+                    <button class="btn btn-secondary" id="uploadBtn">Upload Alerts</button>
                     <input id="uploadInput" type="file" accept="application/json" multiple style="display:none" />
+                    <button class="btn btn-secondary"  id="setProviderBtn" class="btn btn-secondary">Set Provider</button>
                     <button id="clearBtn" class="btn btn-danger">Clear All</button>
                 </div>
             </div>
@@ -139,6 +140,39 @@
                 </div>
                 <div class="modal-body" id="alertDetailContent">
                     <!-- Dynamic content loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Provider Settings Modal -->
+        <div id="providerModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Set AI Provider</h2>
+                    <span class="close" id="providerModalClose">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="providerForm">
+                        <div class="form-group">
+                            <label for="modalAiProvider">LLM Provider:</label>
+                            <select id="modalAiProvider" required>
+                                <option value="openai">OpenAI</option>
+                                <option value="gemini">Gemini</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalAiModel">LLM Model:</label>
+                            <input type="text" id="modalAiModel" placeholder="e.g., gpt-4-turbo-preview or gemini-2.5-flash" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalApiKey">API Key:</label>
+                            <input type="password" id="modalApiKey" placeholder="Enter API Key" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" id="providerModalCancel" class="btn btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

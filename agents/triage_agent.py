@@ -16,9 +16,12 @@ import asyncio
 class TriageAgent:
     """Agent responsible for initial alert triage and noise filtering"""
     
-    def __init__(self):
+    def __init__(self, ai_provider=None, ai_model=None, api_key=None):
         self.llm = get_llm(
             temperature=settings.triage_temperature,
+            provider=ai_provider,
+            model=ai_model,
+            api_key=api_key,
             stream=True  # Enable streaming for real-time updates
         )
         self.prompt_template = self._load_prompt()
@@ -207,6 +210,6 @@ class TriageAgent:
                 event_callback("triage_stream_end", {"result": triage_result})
 
             return TriageResult.parse_raw(triage_result)
-def create_triage_agent() -> TriageAgent:
+def create_triage_agent(ai_provider=None, ai_model=None, api_key=None) -> TriageAgent:
     """Factory function to create triage agent"""
-    return TriageAgent()
+    return TriageAgent(ai_provider=ai_provider, ai_model=ai_model, api_key=api_key)

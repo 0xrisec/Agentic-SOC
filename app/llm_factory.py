@@ -13,6 +13,7 @@ def get_llm(
     temperature: float = 0.7,
     model: Optional[str] = None,
     provider: Optional[str] = None,
+    api_key: Optional[str] = None,
     stream: bool = False
 ):
     """
@@ -34,19 +35,21 @@ def get_llm(
     provider = provider.lower()
 
     if provider == "openai":
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set in environment variables")
+        api_key = api_key or settings.openai_api_key
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is not set")
 
         return ChatOpenAI(
             model=model or settings.openai_model,
             temperature=temperature,
-            api_key=settings.openai_api_key,
+            api_key=api_key,
             stream=stream
         )
 
     elif provider == "gemini":
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not set in environment variables")
+        api_key = api_key or settings.gemini_api_key
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not set")
 
         return ChatGoogleGenerativeAI(
             model=model or settings.gemini_model,

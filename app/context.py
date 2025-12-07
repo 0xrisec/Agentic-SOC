@@ -131,6 +131,9 @@ class SOCWorkflowState(BaseModel):
     
     # AI Configuration
     enable_ai: bool = True
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    api_key: Optional[str] = None
     
     # Agent Results
     triage_result: Optional[TriageResult] = None
