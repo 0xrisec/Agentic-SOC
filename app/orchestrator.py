@@ -109,7 +109,7 @@ class SOCOrchestrator:
         if self.event_callback:
             self.event_callback(state.workflow_id, {"stage": "triage", "status": "started"})
         try:
-            result_state = await self.triage_agent.execute(state)
+            result_state = await self.triage_agent.execute(state, self.event_callback)
             if self.event_callback:
                 self.event_callback(state.workflow_id, {"stage": "triage", "status": "completed", "result": result_state.triage_result.model_dump() if result_state.triage_result else None})
             # Return dict updates for LangGraph
@@ -139,7 +139,7 @@ class SOCOrchestrator:
         if self.event_callback:
             self.event_callback(state.workflow_id, {"stage": "investigation", "status": "started"})
         try:
-            result_state = await self.investigation_agent.execute(state)
+            result_state = await self.investigation_agent.execute(state, self.event_callback)
             if self.event_callback:
                 self.event_callback(state.workflow_id, {"stage": "investigation", "status": "completed", "result": result_state.investigation_result.model_dump() if result_state.investigation_result else None})
             return {
@@ -169,7 +169,7 @@ class SOCOrchestrator:
         if self.event_callback:
             self.event_callback(state.workflow_id, {"stage": "decision", "status": "started"})
         try:
-            result_state = await self.decision_agent.execute(state)
+            result_state = await self.decision_agent.execute(state, self.event_callback)
             if self.event_callback:
                 self.event_callback(state.workflow_id, {"stage": "decision", "status": "completed", "result": result_state.decision_result.model_dump() if result_state.decision_result else None})
             return {
@@ -197,7 +197,7 @@ class SOCOrchestrator:
         if self.event_callback:
             self.event_callback(state.workflow_id, {"stage": "response", "status": "started"})
         try:
-            result_state = await self.response_agent.execute(state)
+            result_state = await self.response_agent.execute(state, self.event_callback)
             if self.event_callback:
                 self.event_callback(state.workflow_id, {"stage": "response", "status": "completed", "result": result_state.response_result.model_dump() if result_state.response_result else None})
             return {

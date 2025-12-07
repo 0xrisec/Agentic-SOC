@@ -604,29 +604,26 @@ function connectWorkflowWebSocket(workflowId, alertData) {
 
             // Update agent status based on message type
             if (msg.stage) {
-                const agentName = msg.stage.toLowerCase();
+                let agentName = msg.stage.toLowerCase();
+                // Normalize stage names
+                if (agentName === 'respond') agentName = 'response';
+                
                 let status = 'In Progress';
                 let logMessage = null;
 
                 console.log(`[WS:${shortId}] Processing agent stage: ${msg.stage}, type: ${msg.type}`);
 
                 if (msg.type === 'progress' || msg.status) {
-                    if (msg.status && msg.status.toLowerCase().includes('completed')) {
-                        status = 'Completed';
-                        console.log(`[WS:${shortId}] Agent ${agentName} completed`);
-                    } else if (msg.status && msg.status.toLowerCase().includes('failed')) {
-                        status = 'Failed';
-                        console.log(`[WS:${shortId}] Agent ${agentName} failed`);
-                    } else if (msg.status && msg.status.toLowerCase().includes('start')) {
-                        status = 'In Progress';
-                        console.log(`[WS:${shortId}] Agent ${agentName} started`);
+                    if (msg.status) {
+                        // Capitalize the status for display
+                        status = msg.status.charAt(0).toUpperCase() + msg.status.slice(1);
                     }
-                    logMessage = msg.status || msg.message;
+                    logMessage = msg.message || msg.status || 'Status update';
                 }
 
                 if (msg.type === 'agent_output' && msg.details) {
                     logMessage = msg.details;
-                    console.log(`[WS:${shortId}] Agent ${agentName} output: ${logMessage}`);
+                    // Keep existing status unless specified
                 }
 
                 updateAgentStatus(workflowId, agentName, status, logMessage);

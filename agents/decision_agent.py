@@ -2,7 +2,7 @@
 Decision Agent - Final Verdict and Prioritization
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 from langchain.prompts import ChatPromptTemplate
 from prompts.human_prompts import DECISION_HUMAN_PROMPT
 from app.context import SOCWorkflowState, DecisionResult, Verdict, Priority, AlertStatus
@@ -60,7 +60,7 @@ class DecisionAgent:
         
         return "\n".join(summary_parts)
     
-    async def execute(self, state: SOCWorkflowState) -> SOCWorkflowState:
+    async def execute(self, state: SOCWorkflowState, event_callback: Callable[[str, Dict[str, Any]], None] | None = None) -> SOCWorkflowState:
         """Execute decision making"""
         try:
             # Update state
@@ -93,12 +93,13 @@ class DecisionAgent:
             
             # Create chain and invoke
             chain = self.prompt_template | self.llm
-            # response = await chain.ainvoke(prompt_vars)
+            if event_callback:
+                event_callback(state.workflow_id, {"type": "progress", "stage": "decide", "status": "processing"})
             
             try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=2)  # Set a 30-second timeout
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=5)  # Set a 5-second timeout
             except asyncio.TimeoutError:
-                 raise TimeoutError("LLM invocation timed out after 30 seconds")
+                 raise TimeoutError("LLM invocation timed out after 5 seconds")
 
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")

@@ -2,7 +2,7 @@
 Response Agent - Action Execution and Ticket Creation
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Callable
 from langchain.prompts import ChatPromptTemplate
 from prompts.human_prompts import RESPONSE_HUMAN_PROMPT
 from app.context import SOCWorkflowState, ResponseResult, AlertStatus, Priority
@@ -153,7 +153,7 @@ class ResponseAgent:
             "automations": automations
         }
     
-    async def execute(self, state: SOCWorkflowState) -> SOCWorkflowState:
+    async def execute(self, state: SOCWorkflowState, event_callback: Callable[[str, Dict[str, Any]], None] | None = None) -> SOCWorkflowState:
         """Execute response actions"""
         try:
             # Update state
@@ -188,11 +188,12 @@ class ResponseAgent:
             
             # Create chain and invoke
             chain = self.prompt_template | self.llm
-            # response = await chain.ainvoke(prompt_vars)
+            if event_callback:
+                event_callback(state.workflow_id, {"type": "progress", "stage": "respond", "status": "processing"})
             try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=2)  # Set a 30-second timeout
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=5)  # Set a 5-second timeout
             except asyncio.TimeoutError:
-                 raise TimeoutError("LLM invocation timed out after 30 seconds")
+                 raise TimeoutError("LLM invocation timed out after 5 seconds")
 
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")

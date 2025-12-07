@@ -35,12 +35,15 @@ class TriageAgent:
         
         return prompt
     
-    async def execute(self, state: SOCWorkflowState) -> SOCWorkflowState:
+    async def execute(self, state: SOCWorkflowState, event_callback: Callable[[str, Dict[str, Any]], None] | None = None) -> SOCWorkflowState:
         """Execute triage analysis"""
         try:
             # Update state
             state.status = AlertStatus.TRIAGING
             state.current_agent = "triage_agent"
+
+            if event_callback:
+                event_callback(state.workflow_id, {"type": "progress", "stage": "triage", "status": "processing"})
 
             # Prepare prompt variables
             alert = state.alert
@@ -64,7 +67,7 @@ class TriageAgent:
             chain = self.prompt_template | self.llm
 
             try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=2)  # Set a 30-second timeout
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=5)  # Set a 30-second timeout
             except asyncio.TimeoutError:
                  raise TimeoutError("LLM invocation timed out after 30 seconds")
 
