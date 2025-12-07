@@ -19,13 +19,13 @@ def check_environment():
     """Check if environment is properly configured"""
     env_file = project_root / ".env"
     
-    if not env_file.exists():
-        print("❌ Error: .env file not found!")
-        print("   Please copy .env.example to .env and configure your OpenAI API key.")
-        print()
-        print("   cp .env.example .env")
-        print("   # Then edit .env and add your OPENAI_API_KEY")
-        return False
+    # if not env_file.exists():
+    #     print("❌ Error: .env file not found!")
+    #     print("   Please copy .env.example to .env and configure your OpenAI API key.")
+    #     print()
+    #     print("   cp .env.example .env")
+    #     print("   # Then edit .env and add your OPENAI_API_KEY")
+    #     return False
     
     # Load environment variables from .env file
     load_dotenv()
