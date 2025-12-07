@@ -67,9 +67,9 @@ class TriageAgent:
             chain = self.prompt_template | self.llm
 
             try:
-                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=120)  # Set a 120-second timeout
+                response = await asyncio.wait_for(chain.ainvoke(prompt_vars), timeout=settings.llm_timeout_seconds)  # Set a configurable timeout
             except asyncio.TimeoutError:
-                 raise TimeoutError("LLM invocation timed out after 120 seconds")
+                 raise TimeoutError(f"LLM invocation timed out after {settings.llm_timeout_seconds} seconds")
 
             if not response or not response.content:
                 raise ValueError("LLM invocation failed or returned an empty response")

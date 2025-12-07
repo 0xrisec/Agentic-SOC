@@ -53,11 +53,14 @@ class Settings(BaseSettings):
     response_temperature: float = 0.2
     
     # Mock Data Configuration
-    use_mock_data_on_error: bool = False
+    use_mock_data_on_error: bool = Field(default=False, env="USE_MOCK_DATA_ON_ERROR")
     
     # Alert Processing
     max_concurrent_alerts: int = 5
     alert_timeout_seconds: int = 300
+    
+    # LLM Timeout Configuration
+    llm_timeout_seconds: int = Field(default=120, env="LLM_TIMEOUT_SECONDS")
     
     class Config:
         env_file = ".env"
