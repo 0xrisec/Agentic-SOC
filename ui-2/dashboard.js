@@ -258,20 +258,14 @@ async function startAnalysis() {
         });
         
         const data = await response.json();
-        addTerminalLog(null, `Analysis initiated successfully.\n`);
+        addTerminalLog(null, `Analysis started for ${selectedAlertsList.length} alerts`);
         
-        // Initialize workflow sessions for each workflow
+        // Connect websockets for real-time updates
         if (data.workflows) {
-            for (let i = 0; i < data.workflows.length; i++) {
-                const wf = data.workflows[i];
-                const alert = selectedAlertsList[i];
-                
-                // Create workflow session in terminal
-                updateWorkflowSession(wf.workflow_id, alert);
-                
-                // Connect websocket for real-time updates
-                connectWorkflowWebSocket(wf.workflow_id, alert);
-            }
+            data.workflows.forEach(wf => {
+                connectWorkflowWebSocket(wf.workflow_id);
+                addTerminalLog(null, `Connected to workflow: ${wf.workflow_id}`);
+            });
         }
         
         // showToast(`Analysis started for ${selectedAlertsList.length} alerts`, 'success');
@@ -305,249 +299,94 @@ async function loadMetrics() {
     }
 }
 
-// Store workflow data globally
-const workflowData = {};
-
-// Clear terminal
-function clearTerminal() {
-    const terminalOutput = document.getElementById('terminalOutput');
-    terminalOutput.innerHTML = '';
-    Object.keys(workflowData).forEach(key => delete workflowData[key]);
-}
-
-// Add general log message (not workflow-specific)
+// Modify the addTerminalLog function to group logs by msg.stage and keep other logs ungrouped
+// Also show a progress icon (↻) in the header when status is 'progress',
+// hide it on 'completed' or 'failed', and color failed status red.
 function addTerminalLog(stage, message, status = null) {
     const terminalOutput = document.getElementById('terminalOutput');
 
     // Clear previous logs if "start analysis" is triggered
     if (stage === 'clear') {
-        clearTerminal();
+        terminalOutput.innerHTML = '';
         return;
     }
 
     // Handle ungrouped logs
     if (!stage) {
         const logLine = document.createElement('div');
-        logLine.className = 'terminal-line system';
+        logLine.className = 'terminal-line';
         logLine.innerHTML = `<span class="message">${message}</span>`;
         terminalOutput.appendChild(logLine);
         terminalOutput.scrollTop = terminalOutput.scrollHeight;
         return;
     }
-}
 
-// Create or update workflow session in terminal
-function updateWorkflowSession(workflowId, alertData) {
-    const terminalOutput = document.getElementById('terminalOutput');
-    
-    // Initialize workflow data if not exists
-    if (!workflowData[workflowId]) {
-        workflowData[workflowId] = {
-            alertId: alertData?.alert_id || 'Unknown',
-            rule: alertData?.rule_name || alertData?.rule_id || 'N/A',
-            agents: {
-                triage: { status: 'Pending', logs: [] },
-                investigation: { status: 'Pending', logs: [] },
-                decision: { status: 'Pending', logs: [] },
-                response: { status: 'Pending', logs: [] }
-            },
-            verdict: null,
-            confidence: null,
-            noiseScore: null,
-            investigationRequired: null,
-            reasoning: null,
-            keyIndicators: null
-        };
+    // Check if a group for this stage already exists
+    let group = terminalOutput.querySelector(`.terminal-group[data-stage="${stage}"]`);
+    if (!group) {
+        // Create a new group if it doesn't exist
+        group = document.createElement('div');
+        group.className = 'terminal-group';
+        group.dataset.stage = stage;
+        group.innerHTML = `
+            <div class="terminal-group-header">
+                <span class="group-stage">${stage.toUpperCase()}</span>
+                <span class="group-progress" style="margin-left: 8px; display: none;">↻</span>
+                <span class="group-toggle" style="margin-left: 8px;">▶</span>
+                <span class="group-status-right" style="margin-left:auto; font-size: 0.85rem; color: #94a3b8;"></span>
+            </div>
+            <div class="terminal-group-content" style="display: none;"></div>
+        `;
+        terminalOutput.appendChild(group);
+
+        // Add event listener to toggle group visibility when clicking on the group name or toggle icon
+        const groupHeader = group.querySelector('.terminal-group-header');
+        groupHeader.addEventListener('click', () => {
+            const content = group.querySelector('.terminal-group-content');
+            const toggleElement = group.querySelector('.group-toggle');
+            const isCollapsed = content.style.display === 'none';
+            content.style.display = isCollapsed ? 'block' : 'none';
+            toggleElement.textContent = isCollapsed ? '▼' : '▶';
+        });
     }
 
-    // Check if session already exists in DOM
-    let session = terminalOutput.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
-    
-    if (!session) {
-        // Create new workflow session
-        session = document.createElement('div');
-        session.className = 'workflow-session';
-        session.dataset.workflowId = workflowId;
-        terminalOutput.appendChild(session);
+    // Update header status/progress if provided
+    if (status) {
+        const header = group.querySelector('.terminal-group-header');
+        const progressEl = group.querySelector('.group-progress');
+        const statusRight = group.querySelector('.group-status-right');
+        if (statusRight) {
+            statusRight.textContent = status;
+            // Color red on failed
+            if (String(status).toLowerCase() === 'failed') {
+                statusRight.style.color = '#ef4444';
+            } else {
+                statusRight.style.color = '#94a3b8';
+            }
+        }
+        // Show/hide progress icon
+        if (String(status).toLowerCase() === 'progress') {
+            progressEl.style.display = 'inline';
+            progressEl.classList.add('spin');
+        } else {
+            progressEl.style.display = 'none';
+            progressEl.classList.remove('spin');
+        }
     }
 
-    // Render the workflow session
-    renderWorkflowSession(session, workflowId);
-    
-    // Scroll to bottom
+    // Add the log message to the group content
+    const groupContent = group.querySelector('.terminal-group-content');
+    const logLine = document.createElement('div');
+    logLine.className = 'terminal-line';
+    logLine.innerHTML = `<span class="message">${message}</span>`;
+    groupContent.appendChild(logLine);
+
+    // Scroll to the bottom of the terminal
     terminalOutput.scrollTop = terminalOutput.scrollHeight;
 }
 
-// Render workflow session HTML
-function renderWorkflowSession(sessionElement, workflowId) {
-    const data = workflowData[workflowId];
-    const shortId = workflowId.substring(0, 8);
-    
-    let html = `
-        <div class="workflow-header">
-            WORKFLOW SESSION: ${workflowId}<br>
-        </div>
-
-        <div class="workflow-section">
-            <div class="workflow-section-title">📌 ALERT DETAILS</div>
-            <div class="workflow-field">
-                <span class="workflow-label">Alert ID</span>
-                <span class="workflow-value">: ${data.alertId}</span>
-            </div>
-            <div class="workflow-field">
-                <span class="workflow-label">Rule</span>
-                <span class="workflow-value">: ${data.rule}</span>
-            </div>
-        </div>
-
-        <div class="workflow-section">
-            <div class="workflow-section-title">🔍 AGENTIC SOC WORKFLOW</div>
-    `;
-
-    // Add agent collapsible sections
-    const agentNames = ['triage', 'investigation', 'decision', 'response'];
-    agentNames.forEach(agentName => {
-        const agent = data.agents[agentName];
-        const displayName = agentName.toUpperCase() + ' AGENT';
-        const statusClass = agent.status.toLowerCase() === 'failed' ? 'failed' : 
-                           agent.status.toLowerCase() === 'completed' ? 'completed' : 'progress';
-        
-        html += `
-            <div class="collapsible-group" data-workflow="${workflowId}" data-agent="${agentName}">
-                <div class="collapsible-header" onclick="toggleCollapsible('${workflowId}', '${agentName}')">
-                    <span class="collapsible-toggle">▶</span>
-                    <span class="collapsible-title">${displayName}</span>
-                    <span class="collapsible-status ${statusClass}">${agent.status}</span>
-                </div>
-                <div class="collapsible-content" id="workflow-${workflowId}-${agentName}">
-                    ${agent.logs.map(log => `<div class="collapsible-log-line">[${shortId}] ${log}</div>`).join('')}
-                    ${agent.logs.length === 0 ? '<div class="collapsible-log-line">No logs available</div>' : ''}
-                </div>
-            </div>
-        `;
-    });
-
-    html += `</div>`;
-
-    // Add final verdict section if available
-    if (data.verdict) {
-        html += `
-            <div class="workflow-section">
-                <div class="workflow-section-title">✅ FINAL VERDICT</div>
-                <div class="workflow-field">
-                    <span class="workflow-label">VERDICT</span>
-                    <span class="workflow-value">: ${data.verdict}</span>
-                </div>
-                <div class="workflow-field">
-                    <span class="workflow-label">CONFIDENCE</span>
-                    <span class="workflow-value">: ${data.confidence || 'N/A'}</span>
-                </div>
-                <div class="workflow-field">
-                    <span class="workflow-label">NOISE SCORE</span>
-                    <span class="workflow-value">: ${data.noiseScore || 'N/A'}</span>
-                </div>
-                <div class="workflow-field">
-                    <span class="workflow-label">INVESTIGATION REQUIRED</span>
-                    <span class="workflow-value">: ${data.investigationRequired || 'N/A'}</span>
-                </div>
-        `;
-
-        // Add collapsible reasoning
-        if (data.reasoning) {
-            html += `
-                <div class="collapsible-group" data-workflow="${workflowId}" data-field="reasoning">
-                    <div class="collapsible-header" onclick="toggleCollapsible('${workflowId}', 'reasoning')">
-                        <span class="collapsible-toggle">▶</span>
-                        <span class="collapsible-title">REASONING</span>
-                    </div>
-                    <div class="collapsible-content" id="workflow-${workflowId}-reasoning">
-                        <div class="collapsible-log-line">${data.reasoning}</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Add collapsible key indicators
-        if (data.keyIndicators) {
-            html += `
-                <div class="collapsible-group" data-workflow="${workflowId}" data-field="keyIndicators">
-                    <div class="collapsible-header" onclick="toggleCollapsible('${workflowId}', 'keyIndicators')">
-                        <span class="collapsible-toggle">▶</span>
-                        <span class="collapsible-title">KEY INDICATORS</span>
-                    </div>
-                    <div class="collapsible-content" id="workflow-${workflowId}-keyIndicators">
-                        <div class="collapsible-log-line">${data.keyIndicators}</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        html += `</div>`;
-    }
-
-    html += `
-        <div class="workflow-divider">
-            --------------------------------------------------
-        </div>
-    `;
-
-    sessionElement.innerHTML = html;
-}
-
-// Toggle collapsible sections
-function toggleCollapsible(workflowId, section) {
-    const content = document.getElementById(`workflow-${workflowId}-${section}`);
-    const header = content.previousElementSibling;
-    const toggle = header.querySelector('.collapsible-toggle');
-    
-    if (content.classList.contains('expanded')) {
-        content.classList.remove('expanded');
-        toggle.textContent = '▶';
-    } else {
-        content.classList.add('expanded');
-        toggle.textContent = '▼';
-    }
-}
-
-// Update agent status and logs
-function updateAgentStatus(workflowId, agentName, status, logMessage = null) {
-    if (!workflowData[workflowId]) return;
-    
-    const agent = workflowData[workflowId].agents[agentName.toLowerCase()];
-    if (!agent) return;
-    
-    agent.status = status;
-    if (logMessage) {
-        agent.logs.push(logMessage);
-    }
-    
-    // Re-render the workflow session
-    const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
-    if (session) {
-        renderWorkflowSession(session, workflowId);
-    }
-}
-
-// Update workflow verdict
-function updateWorkflowVerdict(workflowId, verdictData) {
-    if (!workflowData[workflowId]) return;
-    
-    workflowData[workflowId].verdict = verdictData.verdict || 'Unknown';
-    workflowData[workflowId].confidence = verdictData.confidence || 'N/A';
-    workflowData[workflowId].noiseScore = verdictData.noise_score || 'N/A';
-    workflowData[workflowId].investigationRequired = verdictData.investigation_required ? 'YES' : 'NO';
-    workflowData[workflowId].reasoning = verdictData.reasoning || null;
-    workflowData[workflowId].keyIndicators = verdictData.key_indicators || null;
-    
-    // Re-render the workflow session
-    const session = document.querySelector(`.workflow-session[data-workflow-id="${workflowId}"]`);
-    if (session) {
-        renderWorkflowSession(session, workflowId);
-    }
-}
-
 // Connect to WebSocket for a workflow and handle live updates
-function connectWorkflowWebSocket(workflowId, alertData) {
+function connectWorkflowWebSocket(workflowId) {
     if (!workflowId || wsConnections[workflowId]) return; // already connected
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}/ws/${workflowId}`;
@@ -558,69 +397,63 @@ function connectWorkflowWebSocket(workflowId, alertData) {
             // Optionally send a ping
             try { ws.send('ping'); } catch {}
         };
-        // Handle WebSocket messages and update workflow session
+        // Modify WebSocket message handling to log agent data
         ws.onmessage = (evt) => {
             let msg = null;
             try { msg = JSON.parse(evt.data); } catch { return; }
 
-            // Update agent status based on message type
-            if (msg.stage) {
-                const agentName = msg.stage.toLowerCase();
-                let status = 'In Progress';
-                let logMessage = null;
-
-                if (msg.type === 'progress' || msg.status) {
-                    if (msg.status && msg.status.toLowerCase().includes('completed')) {
-                        status = 'Completed';
-                    } else if (msg.status && msg.status.toLowerCase().includes('failed')) {
-                        status = 'Failed';
-                    } else if (msg.status && msg.status.toLowerCase().includes('start')) {
-                        status = 'In Progress';
-                    }
-                    logMessage = msg.status || msg.message;
-                }
-
-                if (msg.type === 'agent_output' && msg.details) {
-                    logMessage = msg.details;
-                }
-
-                updateAgentStatus(workflowId, agentName, status, logMessage);
+            const shortId = workflowId.substring(0, 8);
+            
+            if (msg.stage && msg.status) {
+                // Group by msg.stage only; show message under that group and update status/progress
+                const stageName = `${msg.stage} agent`;
+                addTerminalLog(stageName, `[${shortId}] ${msg.status}`, msg.status);
+                console.log(`Data received from agent: ${msg.stage}`, msg.status);
             }
 
-            // Handle final verdict/decision
-            if (msg.type === 'final' || (msg.stage === 'decision' && msg.verdict)) {
-                const verdictData = {
-                    verdict: msg.verdict || msg.final_verdict || 'Unknown',
-                    confidence: msg.confidence || msg.confidence_score,
-                    noise_score: msg.noise_score,
-                    investigation_required: msg.investigation_required || false,
-                    reasoning: msg.reasoning || msg.justification,
-                    key_indicators: msg.key_indicators ? (Array.isArray(msg.key_indicators) ? msg.key_indicators.join(', ') : msg.key_indicators) : null
-                };
-                updateWorkflowVerdict(workflowId, verdictData);
-                
-                // Refresh metrics and close connection
+            if (msg.type === 'progress') {
+                // Progress belongs to the same stage group
+                const stageName = `${msg.stage} agent`;
+                addTerminalLog(stageName, `[${shortId}] ${msg.status}`, msg.status);
+                // showToast(`${msg.stage}: ${msg.status}`, 'info');
+            }
+            
+            if (msg.type === 'agent_output' && msg.details) {
+                // Log detailed agent output under the agent's stage if present
+                const stageName = msg.stage ? `${msg.stage} agent` : null;
+                if (stageName) {
+                    addTerminalLog(stageName, `[${shortId}] ${msg.details}`, msg.status);
+                } else {
+                    addTerminalLog(null, `[${shortId}] ${msg.agent || 'Agent'}: ${msg.details}`);
+                }
+            }
+            
+            if (msg.type === 'final') {
+                addTerminalLog(null, `[${shortId}] ✓ Workflow completed: ${msg.status}`);
+                addTerminalLog(null, 'End');
+                // showToast(`Workflow completed: ${msg.status}`, 'success');
+                // Refresh to show final status and LLM results
                 loadMetrics();
+                // Close ws
                 try { ws.close(); } catch {}
                 delete wsConnections[workflowId];
             }
-
-            // Handle errors
+            
             if (msg.type === 'error') {
-                const agentName = msg.stage ? msg.stage.toLowerCase() : null;
-                if (agentName) {
-                    updateAgentStatus(workflowId, agentName, 'Failed', `Error: ${msg.message || 'Unknown error'}`);
-                }
+                console.log('error', `[${shortId}] ✗ Error: ${msg.message || 'Unknown error'}`);
             }
         };
         ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+            console.log('error', `WebSocket error for ${shortId}: Connection failed`);
         };
         ws.onclose = () => {
+            const shortId = workflowId.substring(0, 8);
+            console.log('system', `WebSocket closed for ${shortId}`);
             delete wsConnections[workflowId];
         };
     } catch (e) {
         console.warn('WS connect failed', e);
+        console.log('error', `Failed to connect WebSocket: ${e.message}`);
     }
 }
 

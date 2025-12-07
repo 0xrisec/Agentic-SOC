@@ -220,7 +220,7 @@ body {
 
 /* Right Panel: Terminal */
 .right-panel {
-    width: 550px; /* Increased width for better visibility of workflow sessions */
+    width: 450px; /* Increased width for better visibility */
     background: var(--card-bg);
     border-left: 1px solid var(--border-color);
     display: flex;
@@ -231,7 +231,7 @@ body {
 
 .right-panel.collapsed {
     width: 0;
-    margin-right: -550px;
+    margin-right: -350px;
     box-shadow: none;
 }
 
@@ -435,6 +435,8 @@ body {
     padding: 1rem;
     display: flex;
     flex-direction: column;
+    max-height: 400px; /* Limit height to make it scrollable */
+    overflow-y: auto; /* Enable vertical scrolling */
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
 }
@@ -444,137 +446,8 @@ body {
     overflow-y: auto;
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
-    line-height: 1.6;
+    line-height: 1.5;
     color: #00ff00;
-}
-
-/* Workflow Session Styles */
-.workflow-session {
-    margin: 1.5rem 0;
-    padding: 1rem;
-    border: 2px solid #334155;
-    border-radius: 0.5rem;
-    background: #0a0f1a;
-}
-
-.workflow-header {
-    color: #60a5fa;
-    font-weight: bold;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #334155;
-}
-
-.workflow-section {
-    margin: 1rem 0;
-    padding: 0.75rem 0;
-}
-
-.workflow-section-title {
-    color: #fbbf24;
-    font-weight: bold;
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 1px solid #334155;
-    padding-bottom: 0.25rem;
-}
-
-.workflow-field {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 0.5rem;
-    margin: 0.3rem 0;
-    padding: 0.2rem 0;
-}
-
-.workflow-label {
-    color: #94a3b8;
-    font-size: 0.8rem;
-}
-
-.workflow-value {
-    color: #e2e8f0;
-    font-size: 0.8rem;
-}
-
-.workflow-separator {
-    margin: 1.5rem 0;
-    border-bottom: 2px solid #1e293b;
-}
-
-.workflow-divider {
-    color: #475569;
-    text-align: center;
-    margin: 1rem 0;
-    font-size: 0.75rem;
-}
-
-/* Collapsible Group Styles */
-.collapsible-group {
-    margin: 0.5rem 0;
-}
-
-.collapsible-header {
-    cursor: pointer;
-    padding: 0.4rem 0.6rem;
-    background: #1a1f2e;
-    border-radius: 0.25rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: background 0.2s;
-}
-
-.collapsible-header:hover {
-    background: #252d3f;
-}
-
-.collapsible-toggle {
-    color: #60a5fa;
-    font-size: 0.85rem;
-    user-select: none;
-}
-
-.collapsible-title {
-    color: #94a3b8;
-    font-size: 0.8rem;
-    flex: 1;
-}
-
-.collapsible-status {
-    color: #10b981;
-    font-size: 0.75rem;
-    margin-left: auto;
-}
-
-.collapsible-status.failed {
-    color: #ef4444;
-}
-
-.collapsible-status.progress {
-    color: #f59e0b;
-}
-
-.collapsible-content {
-    padding: 0.75rem 1.5rem;
-    background: #0d1117;
-    border-left: 2px solid #334155;
-    margin-left: 0.5rem;
-    margin-top: 0.25rem;
-    border-radius: 0 0 0.25rem 0.25rem;
-    display: none;
-}
-
-.collapsible-content.expanded {
-    display: block;
-}
-
-.collapsible-log-line {
-    color: #94a3b8;
-    font-size: 0.75rem;
-    padding: 0.2rem 0;
-    line-height: 1.4;
 }
 
 .terminal-line {
@@ -591,6 +464,15 @@ body {
 }
 
 .terminal-line.success {
+
+/* Terminal Group Progress Icon */
+.terminal-group-header .group-progress {
+     color: var(--text-secondary);
+     display: inline-block;
+}
+.terminal-group-header .group-progress.spin {
+     animation: spin 1s linear infinite;
+}
     color: #10b981;
 }
 
@@ -610,15 +492,6 @@ body {
 
 .message {
     color: inherit;
-}
-
-/* Terminal Group Progress Icon */
-.terminal-group-header .group-progress {
-     color: var(--text-secondary);
-     display: inline-block;
-}
-.terminal-group-header .group-progress.spin {
-     animation: spin 1s linear infinite;
 }
 
 /* Status Badges */
